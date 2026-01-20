@@ -551,8 +551,10 @@ contains
 
             end select
 
-            call warn(date_time_compact()//' >> Shot '//num2str(set_srcid(srcindex)) &
-                //' data processing (' // tidy(processings(i)) // ') completed. ')
+            if (rankid_group == 0) then
+                call warn(date_time_compact()//' >> Shot '//num2str(set_srcid(srcindex)) &
+                    //' data processing (' // tidy(processings(i)) // ') completed. ')
+            end if
 
         end do
 

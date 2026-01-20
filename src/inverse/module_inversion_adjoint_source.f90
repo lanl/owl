@@ -826,6 +826,14 @@ contains
             tau = gauss_filt(tau, [0.0, dtw_smooth_gaussian])
         end if
 
+        !$omp parallel do private(i) schedule(auto)
+        do i = 1, nr
+            if (weight(i) == 0) then
+                tau(:, i) = 0
+            end if
+        end do
+        !$omp end parallel do
+
         ! Warping d_obs
         select case (dtw_form)
 
@@ -847,8 +855,11 @@ contains
 
                     do ic = 1, nc
 
-                        dobs(:, i, ic) = ginterp(t, real(dobs(:, i, ic)), tau(:, i) + t, 'cubic')
+                        dobs(:, i, ic) = return_normal(ginterp(t, real(dobs(:, i, ic)), tau(:, i) + t, 'linear'))
                         eta = max(norm2(dsyn(:, i, ic)), norm2(dobs(:, i, ic)))*1.0e-2
+                        if (eta == 0) then
+                            eta = 1.0e-9
+                        end if
 
                         do j = 1, nn
                             u = 0
@@ -865,7 +876,7 @@ contains
                     q(:, i) = median_filt(q(:, i), 3)
                     q(:, i) = gauss_filt(q(:, i), 3.0)
                     q(:, i) = q(:, i)/norm2(q(:, i))
-                    q(:, i) = rescale(q(:, i), [0.0, 1.0])
+                    q(:, i) = return_normal(rescale(q(:, i), [0.0, 1.0]))
 
                 end do
                 !$omp end parallel do
@@ -879,6 +890,14 @@ contains
                 if (dtw_smooth_gaussian > 0) then
                     q = gauss_filt(q, [0.0, dtw_smooth_gaussian])
                 end if
+
+                !$omp parallel do private(i) schedule(auto)
+                do i = 1, nr
+                    if (maxval(abs(q(:, i))) == 0) then
+                        q(:, i) = 1
+                    end if
+                end do
+                !$omp end parallel do
 
             case ('amp')
                 q = ones(nn, nr)
@@ -917,7 +936,7 @@ contains
 
                     if (yn_save_adjsrc) then
                         do ic = 1, nc
-                            warped = ginterp(t, seis_obs(:, i, ic), tau(:, i) + t, 'cubic')
+                            warped = return_normal(ginterp(t, seis_obs(:, i, ic), tau(:, i) + t, 'cubic'))
                             seis_adj(:, i, ic) = q(:, i)*tau(:, i)*deriv(warped)/d
                         end do
                     end if
@@ -926,7 +945,7 @@ contains
 
                     do ic = 1, nc
 
-                        warped = ginterp(t, seis_obs(:, i, ic), tau(:, i) + t, 'cubic')
+                        warped = return_normal(ginterp(t, seis_obs(:, i, ic), tau(:, i) + t, 'cubic'))
                         warped = seis_syn(:, i, ic) - warped
                         val_misfit(i) = val_misfit(i) + sum(warped**2)
 
@@ -945,7 +964,7 @@ contains
                         val_misfit(i) = val_misfit(i) + m_phase*(1.0 + dtw_amp_weight)
 
                         if (yn_save_adjsrc) then
-                            warped = ginterp(t, seis_obs(:, i, ic), tau(:, i) + t, 'cubic')
+                            warped = return_normal(ginterp(t, seis_obs(:, i, ic), tau(:, i) + t, 'cubic'))
                             m_amp = sum((seis_syn(:, i, ic) - warped)**2)
                             seis_adj(:, i, ic) = q(:, i)*tau(:, i)*deriv(warped)/d &
                                 + dtw_amp_weight*m_phase/(m_amp + float_tiny)*(seis_syn(:, i, ic) - warped)
@@ -974,7 +993,8 @@ contains
         real :: dt_base
         character(len=1024) :: filename, file_syn, file_adj
         type(su) :: seismo_obs, seismo_syn
-        real, allocatable, dimension(:) :: err_trc, weight, dobs, dsyn, dadj
+        real, allocatable, dimension(:) :: err_trc, dobs, dsyn, dadj
+        real, allocatable, dimension(:, :) :: weight
         real :: dd, amp_obs, amp_syn, m_obs, m_syn
         real, allocatable, dimension(:) :: norm_obs, norm_syn
         real, allocatable, dimension(:, :, :) :: data_obs, data_syn, data_adj
@@ -1002,7 +1022,7 @@ contains
         data_obs = zeros(nt_base, nr, nc)
         data_syn = zeros(nt_base, nr, nc)
 
-        weight = ones(nr)
+        weight = zeros(nr, nc)
         do ic = 1, nc
 
             filename = '/shot_'//num2str(set_srcid(srcindex))//'_'//'seismogram_'//tidy(data_name(ic))//'.su'
@@ -1028,14 +1048,10 @@ contains
                 amp_obs = norm2(seismo_obs%trace(i)%data)
                 amp_syn = norm2(seismo_syn%trace(i)%data)
 
-                if (gmtr(set_gmtrid(srcindex))%recr(i)%weight == 0 &
+                if (.not.(gmtr(set_gmtrid(srcindex))%recr(i)%weight == 0 &
                         .or. amp_obs < trace_discard_threshold*m_obs &
                         .or. amp_syn < trace_discard_threshold*m_syn &
-                        .or. amp_obs*amp_syn == 0) then
-
-                    weight(i) = min(0.0, weight(i))
-
-                else
+                        .or. amp_obs*amp_syn == 0)) then
 
                     if (seismo_syn%nt /= nt_base .or. seismo_syn%dt /= dt_base) then
                         data_syn(:, i, ic) = interp(seismo_syn%trace(i)%data, seismo_syn%nt, seismo_syn%dt, 0.0, &
@@ -1049,6 +1065,8 @@ contains
                     else
                         data_obs(:, i, ic) = seismo_obs%trace(i)%data
                     end if
+
+                    weight(i, ic) = 1.0
 
                 end if
 
@@ -1090,7 +1108,7 @@ contains
                     !$omp parallel do private(i, dobs, dsyn, dadj) schedule(auto)
                     do i = trace_in_group_rank(rankid_group, 1), trace_in_group_rank(rankid_group, 2)
 
-                        if (weight(i) /= 0) then
+                        if (weight(i, ic) /= 0) then
 
                             ! Resample data to the desired length (adj_nt)
                             if (nt_base /= nn) then
@@ -1175,7 +1193,7 @@ contains
                     !$omp parallel do private(i, dadj) schedule(auto)
                     do i = trace_in_group_rank(rankid_group, 1), trace_in_group_rank(rankid_group, 2)
 
-                        if (weight(i) /= 0) then
+                        if (weight(i, ic) /= 0) then
 
                             call compute_adjsrc_adaptive_spacetime(dobs2(:, i - adaptive_hw:i + adaptive_hw), &
                                 dsyn2(:, i - adaptive_hw:i + adaptive_hw), dd, dadj, err_trc(i))
@@ -1208,14 +1226,14 @@ contains
 
                 do ic = 1, nc
                     call compute_adjsrc_dtw(data_obs(:, :, ic:ic), data_syn(:, :, ic:ic), dt_base, &
-                        weight, data_adj(:, :, ic:ic), err_trc, tau(:, :, ic))
+                        weight(:, ic), data_adj(:, :, ic:ic), err_trc, tau(:, :, ic))
                     misfit_sum = misfit_sum + sum(err_trc)
                 end do
 
             case ('dtw-vector')
                 ! For vector DTW, the misfit is computed shot gather by shot gather, but also all components together
 
-                call compute_adjsrc_dtw(data_obs, data_syn, dt_base, weight, data_adj, err_trc, tau(:, :, 1))
+                call compute_adjsrc_dtw(data_obs, data_syn, dt_base, sum(weight, dim=2), data_adj, err_trc, tau(:, :, 1))
                 misfit_sum = misfit_sum + sum(err_trc)
 
         end select
