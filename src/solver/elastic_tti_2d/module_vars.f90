@@ -159,8 +159,8 @@ module elastic_tti_2d_vars
 
     integer :: nc_mt
 
-    logical :: yn_grad_medium = .true.
-    logical :: yn_grad_source = .false.
+    logical :: yn_update_medium = .true.
+    logical :: yn_update_source = .false.
     real, allocatable, dimension(:, :) :: dstf_dt
     real, allocatable, dimension(:) :: grad_mt
 
@@ -736,19 +736,21 @@ contains
         !        open(3, file=tidy(dir_synthetic)//'/source_interp.txt')
         !        do i = -nkw, nkw
         !            do j = -nkw, nkw
-        !                write(3, *) i*1.0, eta_zz_i(sgmtr%srcr(1)%gz + j), sgmtr%srcr(1)%interp_ix(i)*sgmtr%srcr(1)%interp_iz(j)
+        !                write(3, *) i*1.0, eta_zz_i(sgmtr%srcr(1)%gz + j), &
+            !                   sgmtr%srcr(1)%interp_ix(i)*sgmtr%srcr(1)%interp_iz(j)
         !            end do
         !        end do
         !        do i = -nkw, nkw
         !            do j = -nkw, nkw
-        !                write(3, *) i*1.0 + 10.0, eta_zz_h(sgmtr%srcr(1)%hz + j), sgmtr%srcr(1)%interp_hx(i)*sgmtr%srcr(1)%interp_hz(j)
+        !                write(3, *) i*1.0 + 10.0, eta_zz_h(sgmtr%srcr(1)%hz + j), &
+            !                   sgmtr%srcr(1)%interp_hx(i)*sgmtr%srcr(1)%interp_hz(j)
         !            end do
         !        end do
         !        close(3)
 
         ! If mt inversion is required
-        yn_grad_medium = this%yn_grad_medium
-        yn_grad_source = this%yn_grad_source
+        yn_update_medium = this%yn_update_medium
+        yn_update_source = this%yn_update_source
 
         nc_mt = this%nc_mt
         if (norm2(this%mt) > 0) then

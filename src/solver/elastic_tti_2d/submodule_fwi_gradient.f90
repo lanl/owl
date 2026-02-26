@@ -146,9 +146,9 @@ contains
         call open_boundary_saving
 
         l = np
-        do t = nt, sgmtr%srcr(1)%hnt, -1
+        do t = nt, 1, -1
 
-            if (yn_grad_medium) then
+            if (yn_update_medium .and. t >= sgmtr%srcr(1)%hnt) then
 
                 prev_stressxx_ixiz = stressxx_ixiz
                 prev_stressxx_hxhz = stressxx_hxhz
@@ -394,8 +394,12 @@ contains
 
             ! Compute gradients
             if (mod(t, cc_step_interval) == 0) then
-                call compute_gradient
-                call compute_gradient_source(t)
+                if (yn_update_medium .and. t >= sgmtr%srcr(1)%hnt) then
+                    call compute_gradient
+                end if
+                if (yn_update_source) then
+                    call compute_gradient_source(t)
+                end if
             end if
 
             if (verbose .and. (mod(t, max(nint(nt/10.0), 1)) == 0 .or. t == 1 .or. t == nt)) then
@@ -420,13 +424,13 @@ contains
         call close_boundary_saving(delete=.true.)
 
         ! Output source parameter gradient
-        if (yn_grad_source) then
+        if (yn_update_source) then
             call grd%init(n=[nc_mt, 1], d=[1.0, 1.0], o=[0.0, 0.0])
-            grd%array = reshape(grad_mt, [nc_mt, 1])
+            grd%array = -reshape(grad_mt, [nc_mt, 1])
             call grd%output(tidy(dir_working)//'/shot_'//num2str(sgmtr%id)//'_grad_mt.grd')
         end if
 
-        if (.not. yn_grad_medium) then
+        if (.not. yn_update_medium) then
             return
         end if
 
@@ -636,10 +640,6 @@ contains
         integer :: i, j
         integer :: sgnh
         real :: tmpxx, tmpzz, tmpxz, tmpxxr, tmpzzr, tmpxzr
-
-        if (.not. yn_grad_medium) then
-            return
-        end if
 
         !$omp parallel do private(i, j, tmpxx, tmpzz, tmpxz, tmpxxr, tmpzzr, tmpxzr) collapse(2) schedule(auto)
         do j = -pml + 1, nz + pml
@@ -934,10 +934,6 @@ contains
 
         integer :: rgx, rgz, rhx, rhz
         integer :: i, irx, irz
-
-        if (.not. yn_grad_source) then
-            return
-        end if
 
         do i = 1, sgmtr%ns
 

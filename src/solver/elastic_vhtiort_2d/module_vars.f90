@@ -130,8 +130,8 @@ module elastic_vhtiort_2d_vars
 
     integer :: nc_mt
 
-    logical :: yn_grad_medium = .true.
-    logical :: yn_grad_source = .false.
+    logical :: yn_update_medium = .true.
+    logical :: yn_update_source = .false.
     real, allocatable, dimension(:, :) :: dstf_dt
 
 contains
@@ -506,8 +506,8 @@ contains
         yn_compz = this%compz
 
         ! If mt inversion is required
-        yn_grad_medium = this%yn_grad_medium
-        yn_grad_source = this%yn_grad_source
+        yn_update_medium = this%yn_update_medium
+        yn_update_source = this%yn_update_source
 
         nc_mt = this%nc_mt
         if (norm2(this%mt) > 0) then

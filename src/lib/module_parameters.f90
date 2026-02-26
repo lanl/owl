@@ -317,8 +317,8 @@ module mod_parameters
 
     integer :: htlen = 30
 
-    logical :: yn_grad_medium = .true.
-    logical :: yn_grad_source = .false.
+    logical :: yn_update_medium = .true.
+    logical :: yn_update_source = .false.
 
 contains
 
@@ -664,15 +664,15 @@ contains
         end do
 
         if (any(model_name /= 'mt' .and. model_name /= 'stf')) then
-            yn_grad_medium = .true.
+            yn_update_medium = .true.
         else
-            yn_grad_medium = .false.
+            yn_update_medium = .false.
         end if
 
         if (any(model_name == 'mt' .or. model_name == 'stf')) then
-            yn_grad_source = .true.
+            yn_update_source = .true.
         else
-            yn_grad_source = .false.
+            yn_update_source = .false.
         end if
 
 #endif

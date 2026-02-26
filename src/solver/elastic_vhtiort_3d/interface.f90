@@ -69,8 +69,8 @@ module elastic_vhtiort_3d
         real, allocatable, dimension(:) :: mt
         real, allocatable, dimension(:) :: stf
 
-        logical :: yn_grad_medium = .true.
-        logical :: yn_grad_source = .false.
+        logical :: yn_update_medium = .true.
+        logical :: yn_update_source = .false.
 
     contains
 
