@@ -754,30 +754,37 @@ contains
 
         integer, intent(in) :: t
 
-        integer :: rgx, rgz, rhx, rhz
-        integer :: i, irx, irz
+        integer :: sgx, sgz, i, irx, irz
 
         do i = 1, sgmtr%ns
 
-            rgx = sgmtr%srcr(i)%gx
-            rgz = sgmtr%srcr(i)%gz
-            rhx = sgmtr%srcr(i)%hx
-            rhz = sgmtr%srcr(i)%hz
-
+            sgx = sgmtr%srcr(i)%gx
+            sgz = sgmtr%srcr(i)%gz
             do irz = -nkw, nkw
                 do irx = -nkw, nkw
-                    grad_mt(1) = grad_mt(1) - &
-                        stressxxr(rgx + irx, rgz + irz) &
-                        *sgmtr%srcr(i)%interp_ix(irx) &
-                        *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
-                    grad_mt(3) = grad_mt(3) - &
-                        stresszzr(rgx + irx, rgz + irz) &
-                        *sgmtr%srcr(i)%interp_ix(irx) &
-                        *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
-                    grad_mt(5) = grad_mt(5) - &
-                        stressxzr(rhx + irx, rhz + irz) &
-                        *sgmtr%srcr(i)%interp_hx(irx) &
-                        *sgmtr%srcr(i)%interp_hz(irz)*dstf_dt(t, i)
+                    if (ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
+                        grad_mt(1) = grad_mt(1) - &
+                            stressxxr(sgx + irx, sgz + irz) &
+                            *sgmtr%srcr(i)%interp_ix(irx) &
+                            *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
+                        grad_mt(3) = grad_mt(3) - &
+                            stresszzr(sgx + irx, sgz + irz) &
+                            *sgmtr%srcr(i)%interp_ix(irx) &
+                            *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
+                    end if
+                end do
+            end do
+
+            sgx = sgmtr%srcr(i)%hx
+            sgz = sgmtr%srcr(i)%hz
+            do irz = -nkw, nkw
+                do irx = -nkw, nkw
+                    if (ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
+                        grad_mt(5) = grad_mt(5) - &
+                            stressxzr(sgx + irx, sgz + irz) &
+                            *sgmtr%srcr(i)%interp_hx(irx) &
+                            *sgmtr%srcr(i)%interp_hz(irz)*dstf_dt(t, i)
+                    end if
                 end do
             end do
 
