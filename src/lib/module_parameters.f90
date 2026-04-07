@@ -379,7 +379,7 @@ contains
 
         call mpibarrier
 
-        call bcast_array(file_parameter)
+        call bcast(file_parameter)
 
         ! 2D does not support domain decomposition yet, for the purpose of simplicity
 #ifdef _dim2_

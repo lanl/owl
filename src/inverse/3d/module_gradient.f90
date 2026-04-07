@@ -368,6 +368,9 @@ contains
                 end if
 
             end if
+            ! Note that here synthetic_processed must be broadcasted as
+            ! data processing only occurs in rankid_group = 0
+            call bcast_group(synthetic_processed, source=0)
             call mpibarrier_group
 
             ! Compute adjoint source
@@ -444,7 +447,7 @@ contains
                     case ('mt', 'stf')
 
                         call grd%input(tidy(shot_prefix)//'_grad_'//tidy(model_name(i))//'.grd')
-                        model_grad(i)%array = model_grad(i)%array + grd%array
+                        model_grad(i)%array(:, ishot, 1) = model_grad(i)%array(:, ishot, 1) + grd%array(:, 1, 1)
                         if (rankid_group == 0) then
                             call warn(date_time_compact()//' Shot '//num2str(set_srcid(ishot))//' '//tidy(model_name(i))//' merged.')
                         end if

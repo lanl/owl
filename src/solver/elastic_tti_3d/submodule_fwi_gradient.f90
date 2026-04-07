@@ -1026,7 +1026,7 @@ contains
             call allreduce_array_group(grad_mt)
             if (rankid_group == 0) then
                 call grd%init(n=[nc_mt, 1, 1], d=[1.0, 1.0, 1.0], o=[0.0, 0.0, 0.0])
-                grd%array = -reshape(grad_mt, [nc_mt, 1, 1])
+                grd%array = -reshape(grad_mt/maxval(abs(grad_mt)), [nc_mt, 1, 1])
                 call grd%output(tidy(dir_working)//'/shot_'//num2str(sgmtr%id)//'_grad_mt.grd')
             end if
         end if

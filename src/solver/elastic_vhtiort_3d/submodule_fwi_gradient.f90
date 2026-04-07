@@ -434,7 +434,7 @@ contains
 
                 if (rankid_group == 0) then
                     call warn(date_time_compact()//' >> Shot '//num2str(sgmtr%id) &
-                        //' forward modeling step '//num2str(t)//' of '//num2str(nt))
+                        //' FWI gradient computation step '//num2str(t)//' of '//num2str(nt))
                     if (wnan) then
                         call warn(date_time_compact()//' >> Vxr, Vyr, Vzr contain NaN!')
                         stop
@@ -458,7 +458,7 @@ contains
             call allreduce_array_group(grad_mt)
             if (rankid_group == 0) then
                 call grd%init(n=[nc_mt, 1, 1], d=[1.0, 1.0, 1.0], o=[0.0, 0.0, 0.0])
-                grd%array = -reshape(grad_mt, [nc_mt, 1, 1])
+                grd%array = -reshape(grad_mt/maxval(abs(grad_mt)), [nc_mt, 1, 1])
                 call grd%output(tidy(dir_working)//'/shot_'//num2str(sgmtr%id)//'_grad_mt.grd')
             end if
         end if
@@ -1204,7 +1204,6 @@ contains
             sgx = sgmtr%srcr(i)%gx
             sgy = sgmtr%srcr(i)%gy
             sgz = sgmtr%srcr(i)%gz
-
             do irz = -nkw, nkw
                 do iry = -nkw, nkw
                     do irx = -nkw, nkw

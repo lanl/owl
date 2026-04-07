@@ -72,7 +72,6 @@ contains
     !
     ! Iteration directory of muted synthetic data
     !
-    !
     function dir_iter_synthetic_processed(iter) result(dir)
 
         integer :: iter
@@ -221,7 +220,7 @@ contains
             close (33)
 
             open (33, file=tidy(file_shot_misfit), status='old', access='stream', form='unformatted')
-            do i = 1, resume_from_iter - 1
+            do i = 0, resume_from_iter - 1
                 read (33) shot_misfit(:, i)
             end do
             close (33)

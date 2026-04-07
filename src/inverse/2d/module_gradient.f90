@@ -393,7 +393,7 @@ contains
                     case ('mt', 'stf')
 
                         call grd%input(tidy(shot_prefix)//'_grad_'//tidy(model_name(i))//'.grd')
-                        model_grad(i)%array = model_grad(i)%array + grd%array
+                        model_grad(i)%array(:, ishot) = model_grad(i)%array(:, ishot) + grd%array(:, 1)
                         call warn(date_time_compact()//' Shot '//num2str(set_srcid(ishot))//' '//tidy(model_name(i))//' merged.')
 
                     case default

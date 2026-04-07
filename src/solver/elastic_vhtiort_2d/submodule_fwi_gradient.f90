@@ -293,7 +293,7 @@ contains
         ! Output source parameter gradient
         if (yn_update_source) then
             call grd%init(n=[nc_mt, 1], d=[1.0, 1.0], o=[0.0, 0.0])
-            grd%array = -reshape(grad_mt, [nc_mt, 1])
+            grd%array = -reshape(grad_mt/maxval(abs(grad_mt)), [nc_mt, 1])
             call grd%output(tidy(dir_working)//'/shot_'//num2str(sgmtr%id)//'_grad_mt.grd')
         end if
 
