@@ -50,8 +50,8 @@ contains
         grad = zeros(ng)
         srch = zeros(ng)
 
-        if (iter == 1 .or. kernel_type_changed) then
-            ! Iteration 1 or the iteration where kernel type changes uses steepes descent
+        if (iter == 1) then
+            ! Iteration 1
 
             ! Input current gradient
             call input_array(grad, dir_iter_model(iter)//'/grad_'//tidy(parameter_name)//'.bin')
@@ -269,70 +269,6 @@ contains
     end subroutine init_lbfgs
 
     !
-    !> Calculate search direction in Adam framework
-    !
-    function compute_search_direction_adam_single_parameter(parameter_name) result(srch)
-
-        character(len=*), intent(in) :: parameter_name
-        real, allocatable, dimension(:) :: srch
-
-        real, allocatable, dimension(:) :: prev_m1, prev_m2, grad
-        real, allocatable, dimension(:) :: m1, m2
-
-        ! Initialize search directions
-        prev_m1 = zeros(ng)
-        prev_m2 = zeros(ng)
-        m1 = zeros(ng)
-        m2 = zeros(ng)
-
-        grad = zeros(ng)
-        srch = zeros(ng)
-
-        if (iter == 1 .or. kernel_type_changed) then
-            ! Iteration 1 uses steepes descent
-
-            ! Input current gradient
-            call input_array(grad, dir_iter_model(iter)//'/grad_'//tidy(parameter_name)//'.bin')
-
-            ! Calculate current search direction
-            srch = -grad
-
-            m1 = (1.0 - adam_beta1)*grad
-            m2 = (1.0 - adam_beta2)*grad**2
-            call output_array(m1, dir_iter_model(iter)//'/m1_'//tidy(parameter_name)//'.bin')
-            call output_array(m2, dir_iter_model(iter)//'/m2_'//tidy(parameter_name)//'.bin')
-
-        else
-            ! For other iterations update search direction
-
-            ! Input previous first moment
-            call input_array(prev_m1, dir_iter_model(iter - 1)//'/m1_'//tidy(parameter_name)//'.bin')
-
-            ! Input previous search direction
-            call input_array(prev_m2, dir_iter_model(iter - 1)//'/m2_'//tidy(parameter_name)//'.bin')
-
-            ! Input current gradient
-            call input_array(grad, dir_iter_model(iter)//'/grad_'//tidy(parameter_name)//'.bin')
-
-            ! Biased moments
-            m1 = adam_beta1*prev_m1 + (1.0 - adam_beta1)*grad
-            m2 = adam_beta2*prev_m2 + (1.0 - adam_beta2)*grad**2
-
-            call output_array(m1, dir_iter_model(iter)//'/m1_'//tidy(parameter_name)//'.bin')
-            call output_array(m2, dir_iter_model(iter)//'/m2_'//tidy(parameter_name)//'.bin')
-
-            ! Bias-corrected moments
-            m1 = m1/(1.0 - adam_beta1**iter)
-            m2 = m2/(1.0 - adam_beta2**iter)
-
-            ! Update search direction
-            srch = -m1/(sqrt(m2) + adam_eps)
-
-        end if
-
-    end function
-
-    !
     !> Calculate search directions
     !
     subroutine compute_search_direction
@@ -356,8 +292,6 @@ contains
                             tmp = compute_search_direction_cg_single_parameter(model_name(i))
                         case ('L-BFGS', 'l-bfgs', 'l-BFGS')
                             tmp = compute_search_direction_lbfgs_single_parameter(model_name(i))
-                        case ('Adam', 'adam')
-                            tmp = compute_search_direction_adam_single_parameter(model_name(i))
                     end select
 
 #ifdef _dim2_
@@ -401,41 +335,6 @@ contains
         ! Print info
         if (rankid == 0) then
             call warn(date_time_compact()//' >>>>>>>>>> Search direction computation completed. ')
-        end if
-
-        if (any(search_direction_processing /= '')) then
-
-            ! Process search direction
-            do i = 1, nmodel
-
-                select case (model_name(i))
-
-                    case ('mt', 'stf')
-
-                    case default
-
-                        ! Process search directions
-                        if(yn_shared_model_processing) then
-                            call process_model_single_parameter(model_srch(i)%array, 'srch', param_name=model_m(i)%name)
-                        else
-                            call process_model_single_parameter(model_srch(i)%array, 'srch_'//tidy(model_name(i)), param_name=model_m(i)%name)
-                        end if
-
-                        ! Re-save
-                        if (rankid == 0) then
-
-                            call output_array(model_srch(i)%array, dir_iter_model(iter)//'/srch_'//tidy(model_name(i))//'.bin')
-
-                        end if
-
-                end select
-
-            end do
-
-            if (rankid == 0) then
-                call warn(date_time_compact()//' >>>>>>>>>> Search direction processing completed. ')
-            end if
-
         end if
 
     end subroutine

@@ -1,5 +1,5 @@
 !
-! © 2025. Triad National Security, LLC. All rights reserved.
+! © 2025-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -36,8 +36,6 @@ contains
         type(grid2) :: grd
 
         yn_energy_precond = this%energy_precond
-        kernel_v = this%kernel_v
-        kernel_a = this%kernel_a
 
         call prepare_modeling(this)
         call compute_cfspml_damping_coef
@@ -174,35 +172,27 @@ contains
         ! Process and output gradients
         if (yn_energy_precond) then
 
-            if (kernel_v /= '') then
-                energy_src_v = energy_src_v + 1.0e-3*maxval(energy_src_v)
-                energy_rec_v = energy_rec_v + 1.0e-3*maxval(energy_rec_v)
-                energy_src_v = sqrt(energy_src_v*energy_rec_v)
-                grad_vp = grad_vp/energy_src_v
-            end if
+            energy_src_v = energy_src_v + 1.0e-3*maxval(energy_src_v)
+            energy_rec_v = energy_rec_v + 1.0e-3*maxval(energy_rec_v)
+            energy_src_v = sqrt(energy_src_v*energy_rec_v)
+            grad_vp = grad_vp/energy_src_v
 
-            if (kernel_a /= '') then
-                energy_src_a = energy_src_a + 1.0e-3*maxval(energy_src_a)
-                energy_rec_a = energy_rec_a + 1.0e-3*maxval(energy_rec_a)
-                energy_src_a = sqrt(energy_src_a*energy_rec_a)
-                grad_rho = grad_rho/energy_src_a
-            end if
+            energy_src_a = energy_src_a + 1.0e-3*maxval(energy_src_a)
+            energy_rec_a = energy_rec_a + 1.0e-3*maxval(energy_rec_a)
+            energy_src_a = sqrt(energy_src_a*energy_rec_a)
+            grad_rho = grad_rho/energy_src_a
 
         end if
 
         call grd%init(n=[nz, nx], d=[dz, dx], o=[oz, ox])
 
-        if (kernel_v /= '') then
-            grd%array = transpose(return_normal(grad_vp))
-            grd%array = return_normal(grd%array)
-            call grd%output(tidy(dir_working)//'/shot_'//tidy(num2str(sgmtr%id, '(i)'))//'_grad_vp.grd')
-        end if
+        grd%array = transpose(return_normal(grad_vp))
+        grd%array = return_normal(grd%array)
+        call grd%output(tidy(dir_working)//'/shot_'//tidy(num2str(sgmtr%id, '(i)'))//'_grad_vp.grd')
 
-        if (kernel_a /= '') then
-            grd%array = transpose(return_normal(grad_rho))
-            grd%array = return_normal(grd%array)
-            call grd%output(tidy(dir_working)//'/shot_'//tidy(num2str(sgmtr%id, '(i)'))//'_grad_rho.grd')
-        end if
+        grd%array = transpose(return_normal(grad_rho))
+        grd%array = return_normal(grd%array)
+        call grd%output(tidy(dir_working)//'/shot_'//tidy(num2str(sgmtr%id, '(i)'))//'_grad_rho.grd')
 
         call mpibarrier_group
 
@@ -211,214 +201,68 @@ contains
     subroutine compute_gradient
 
         integer :: i, j
-        integer :: sgnh
 
         ! Vp
-        if (kernel_v /= '') then
+        !$omp parallel do private(i, j) collapse(2)
+        do j = -pml + 1, nz + pml
+            do i = -pml + 1, nx + pml
+                src_p(i, j) = p(i, j) - prev_p(i, j)
+                rec_p(i, j) = pr(i, j)
+            end do
+        end do
+        !$omp end parallel do
+
+        !$omp parallel do private(i, j) collapse(2)
+        do j = 1, nz
+            do i = 1, nx
+                grad_vp(i, j) = grad_vp(i, j) - src_p(i, j)*rec_p(i, j)/(rho(i, j)*vp(i, j)**3)
+            end do
+        end do
+        !$omp end parallel do
+
+        if (yn_energy_precond) then
 
             !$omp parallel do private(i, j) collapse(2)
-            do j = -pml + 1, nz + pml
-                do i = -pml + 1, nx + pml
-                    src_p(i, j) = p(i, j) - prev_p(i, j)
-                    rec_p(i, j) = pr(i, j)
+            do j = 1, nz
+                do i = 1, nx
+                    energy_src_v(i, j) = energy_src_v(i, j) + src_p(i, j)**2/(rho(i, j)*vp(i, j)**3)
+                    energy_rec_v(i, j) = energy_rec_v(i, j) + rec_p(i, j)**2/(rho(i, j)*vp(i, j)**3)
                 end do
             end do
             !$omp end parallel do
-
-            if (kernel_v == 'full') then
-
-                !$omp parallel do private(i, j) collapse(2)
-                do j = 1, nz
-                    do i = 1, nx
-                        grad_vp(i, j) = grad_vp(i, j) - src_p(i, j)*rec_p(i, j)/(rho(i, j)*vp(i, j)**3)
-                    end do
-                end do
-                !$omp end parallel do
-
-            else
-
-                ! Along x
-                if (index(kernel_v, 'lowx') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_v, 'highx') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    !$omp parallel do private(i, j, p_lrsh, p_lrrh)
-                    do j = 1, nz
-
-                        p_lrsh = src_p(-pml + 1:nx + pml, j)
-                        p_lrrh = rec_p(-pml + 1:nx + pml, j)
-                        call hilbert_transform(p_lrsh)
-                        call hilbert_transform(p_lrrh)
-
-                        grad_vp(1:nx, j) = grad_vp(1:nx, j) &
-                            - (src_p(1:nx, j)*rec_p(1:nx, j) + sgnh*p_lrsh(1:nx)*p_lrrh(1:nx)) &
-                            /(rho(1:nx, j)*vp(1:nx, j)**3)
-
-                    end do
-                    !$omp end parallel do
-
-                end if
-
-                ! Along z
-                if (index(kernel_v, 'lowz') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_v, 'highz') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    !$omp parallel do private(i, j, p_udsh, p_udrh)
-                    do i = 1, nx
-
-                        p_udsh = src_p(i, -pml + 1:nz + pml)
-                        p_udrh = rec_p(i, -pml + 1:nz + pml)
-                        call hilbert_transform(p_udsh)
-                        call hilbert_transform(p_udrh)
-
-                        grad_vp(i, 1:nz) = grad_vp(i, 1:nz) &
-                            - (src_p(i, 1:nz)*rec_p(i, 1:nz) + sgnh*p_udsh(1:nz)*p_udrh(1:nz)) &
-                            /(rho(i, 1:nz)*vp(i, 1:nz)**3)
-
-                    end do
-                    !$omp end parallel do
-
-                end if
-
-            end if
-
-
-            if (yn_energy_precond) then
-
-                !$omp parallel do private(i, j) collapse(2)
-                do j = 1, nz
-                    do i = 1, nx
-                        energy_src_v(i, j) = energy_src_v(i, j) + src_p(i, j)**2/(rho(i, j)*vp(i, j)**3)
-                        energy_rec_v(i, j) = energy_rec_v(i, j) + rec_p(i, j)**2/(rho(i, j)*vp(i, j)**3)
-                    end do
-                end do
-                !$omp end parallel do
-
-            end if
 
         end if
 
         ! Density
-        if (kernel_a /= '') then
+        !$omp parallel do private(i, j) collapse(2)
+        do j = -pml + 1, nz + pml
+            do i = -pml + 1, nx + pml
+                src_vx(i, j) = sum(vx(i:i + 1, j)) - sum(prev_vx(i:i + 1, j))
+                rec_vx(i, j) = sum(vxr(i:i + 1, j))
+                src_vz(i, j) = sum(vz(i, j:j + 1)) - sum(prev_vz(i, j:j + 1))
+                rec_vz(i, j) = sum(vzr(i, j:j + 1))
+            end do
+        end do
+        !$omp end parallel do
+
+        !$omp parallel do private(i, j) collapse(2)
+        do j = 1, nz
+            do i = 1, nx
+                grad_rho(i, j) = grad_rho(i, j) + src_vx(i, j)*rec_vx(i, j) + src_vz(i, j)*rec_vz(i, j)
+            end do
+        end do
+        !$omp end parallel do
+
+        if (yn_energy_precond) then
 
             !$omp parallel do private(i, j) collapse(2)
-            do j = -pml + 1, nz + pml
-                do i = -pml + 1, nx + pml
-                    src_vx(i, j) = sum(vx(i:i + 1, j)) - sum(prev_vx(i:i + 1, j))
-                    rec_vx(i, j) = sum(vxr(i:i + 1, j))
-                    src_vz(i, j) = sum(vz(i, j:j + 1)) - sum(prev_vz(i, j:j + 1))
-                    rec_vz(i, j) = sum(vzr(i, j:j + 1))
+            do j = 1, nz
+                do i = 1, nx
+                    energy_src_a(i, j) = energy_src_a(i, j) + src_vx(i, j)**2 + src_vz(i, j)**2
+                    energy_rec_a(i, j) = energy_rec_a(i, j) + rec_vx(i, j)**2 + rec_vz(i, j)**2
                 end do
             end do
             !$omp end parallel do
-
-            if (kernel_a == 'full') then
-
-                !$omp parallel do private(i, j) collapse(2)
-                do j = 1, nz
-                    do i = 1, nx
-                        grad_rho(i, j) = grad_rho(i, j) + src_vx(i, j)*rec_vx(i, j) + src_vz(i, j)*rec_vz(i, j)
-                    end do
-                end do
-                !$omp end parallel do
-
-            else
-
-                ! Along x
-                if (index(kernel_a, 'lowx') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_a, 'highx') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    !$omp parallel do private(i, j, p_lrsh, p_lrrh)
-                    do j = 1, nz
-
-                        p_lrsh = src_vx(-pml + 1:nx + pml, j)
-                        p_lrrh = rec_vx(-pml + 1:nx + pml, j)
-                        call hilbert_transform(p_lrsh)
-                        call hilbert_transform(p_lrrh)
-
-                        grad_rho(1:nx, j) = grad_rho(1:nx, j) &
-                            + (src_vx(1:nx, j)*rec_vx(1:nx, j) + sgnh*p_lrsh(1:nx)*p_lrrh(1:nx))
-
-                        p_lrsh = src_vz(-pml + 1:nx + pml, j)
-                        p_lrrh = rec_vz(-pml + 1:nx + pml, j)
-                        call hilbert_transform(p_lrsh)
-                        call hilbert_transform(p_lrrh)
-
-                        grad_rho(1:nx, j) = grad_rho(1:nx, j) &
-                            + (src_vz(1:nx, j)*rec_vz(1:nx, j) + sgnh*p_lrsh(1:nx)*p_lrrh(1:nx))
-
-                    end do
-                    !$omp end parallel do
-
-                end if
-
-                ! Along z
-                if (index(kernel_a, 'lowz') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_a, 'highz') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    !$omp parallel do private(i, j, p_udsh, p_udrh)
-                    do i = 1, nx
-
-                        p_udsh = src_vx(i, -pml + 1:nz + pml)
-                        p_udrh = rec_vx(i, -pml + 1:nz + pml)
-                        call hilbert_transform(p_udsh)
-                        call hilbert_transform(p_udrh)
-                        grad_rho(i, 1:nz) = grad_rho(i, 1:nz) &
-                            + (src_vx(i, 1:nz)*rec_vx(i, 1:nz) + sgnh*p_udsh(1:nz)*p_udrh(1:nz))
-
-                        p_udsh = src_vz(i, -pml + 1:nz + pml)
-                        p_udrh = rec_vz(i, -pml + 1:nz + pml)
-                        call hilbert_transform(p_udsh)
-                        call hilbert_transform(p_udrh)
-                        grad_rho(i, 1:nz) = grad_rho(i, 1:nz) &
-                            + (src_vz(i, 1:nz)*rec_vz(i, 1:nz) + sgnh*p_udsh(1:nz)*p_udrh(1:nz))
-
-                    end do
-                    !$omp end parallel do
-
-                end if
-
-            end if
-
-            if (yn_energy_precond) then
-
-                !$omp parallel do private(i, j) collapse(2)
-                do j = 1, nz
-                    do i = 1, nx
-                        energy_src_a(i, j) = energy_src_a(i, j) + src_vx(i, j)**2 + src_vz(i, j)**2
-                        energy_rec_a(i, j) = energy_rec_a(i, j) + rec_vx(i, j)**2 + rec_vz(i, j)**2
-                    end do
-                end do
-                !$omp end parallel do
-
-            end if
 
         end if
 

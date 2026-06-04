@@ -83,9 +83,6 @@ module acoustic_iso_2d_vars
 
     logical :: yn_energy_precond = .true.
 
-    character(len=24) :: kernel_v = 'full'
-    character(len=24) :: kernel_a = 'full'
-
     character(len=1024) :: dir_synthetic, dir_snapshot, dir_working, dir_adjoint
 
 contains

@@ -40,8 +40,6 @@ contains
         real :: wmin, wmax
 
         yn_energy_precond = this%energy_precond
-        kernel_v = this%kernel_v
-        kernel_a = this%kernel_a
 
         call prepare_modeling(this)
         call compute_cfspml_damping_coef
@@ -58,33 +56,15 @@ contains
         call alloc_array(prev_vy, [nx1, nx2, ny1, ny2, nz1, nz2], pad=fdhalf)
         call alloc_array(prev_vz, [nx1, nx2, ny1, ny2, nz1, nz2], pad=fdhalf)
 
-        if (kernel_v == '') then
-            call alloc_array(src_p, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(rec_p, [nx1, nx2, ny1, ny2, nz1, nz2])
-        else
-            call alloc_array(src_p, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(rec_p, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(src_hilbert, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(rec_hilbert, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-        end if
+        call alloc_array(src_p, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(rec_p, [nx1, nx2, ny1, ny2, nz1, nz2])
 
-        if (kernel_a == '') then
-            call alloc_array(src_vx, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(rec_vx, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(src_vy, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(rec_vy, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(src_vz, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(rec_vz, [nx1, nx2, ny1, ny2, nz1, nz2])
-        else
-            call alloc_array(src_vx, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(rec_vx, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(src_vy, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(rec_vy, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(src_vz, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(rec_vz, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(src_hilbert, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(rec_hilbert, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-        end if
+        call alloc_array(src_vx, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(rec_vx, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(src_vy, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(rec_vy, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(src_vz, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(rec_vz, [nx1, nx2, ny1, ny2, nz1, nz2])
 
         grad_vp = zeros(nx, ny, nz)
         grad_rho = zeros(nx, ny, nz)
@@ -263,19 +243,15 @@ contains
             call allreduce_array_group(energy_src_a)
             call allreduce_array_group(energy_rec_a)
 
-            if (kernel_v /= '') then
-                energy_src_v = energy_src_v + 1.0e-3*maxval(energy_src_v)
-                energy_rec_v = energy_rec_v + 1.0e-3*maxval(energy_rec_v)
-                energy_src_v = sqrt(energy_src_v*energy_rec_v)
-                grad_vp = grad_vp/energy_src_v
-            end if
+            energy_src_v = energy_src_v + 1.0e-3*maxval(energy_src_v)
+            energy_rec_v = energy_rec_v + 1.0e-3*maxval(energy_rec_v)
+            energy_src_v = sqrt(energy_src_v*energy_rec_v)
+            grad_vp = grad_vp/energy_src_v
 
-            if (kernel_a /= '') then
-                energy_src_a = energy_src_a + 1.0e-3*maxval(energy_src_a)
-                energy_rec_a = energy_rec_a + 1.0e-3*maxval(energy_rec_a)
-                energy_src_a = sqrt(energy_src_a*energy_rec_a)
-                grad_rho = grad_rho/energy_src_a
-            end if
+            energy_src_a = energy_src_a + 1.0e-3*maxval(energy_src_a)
+            energy_rec_a = energy_rec_a + 1.0e-3*maxval(energy_rec_a)
+            energy_src_a = sqrt(energy_src_a*energy_rec_a)
+            grad_rho = grad_rho/energy_src_a
 
         end if
 
@@ -283,17 +259,13 @@ contains
 
             call grd%init(n=[nz, ny, nx], d=[dz, dy, dx], o=[oz, oy, ox])
 
-            if (kernel_v /= '') then
-                grd%array = permute(return_normal(grad_vp), 321)
-                grd%array = return_normal(grd%array)
-                call grd%output(tidy(dir_working)//'/shot_'//tidy(num2str(sgmtr%id, '(i)'))//'_grad_vp.grd')
-            end if
+            grd%array = permute(return_normal(grad_vp), 321)
+            grd%array = return_normal(grd%array)
+            call grd%output(tidy(dir_working)//'/shot_'//tidy(num2str(sgmtr%id, '(i)'))//'_grad_vp.grd')
 
-            if (kernel_a /= '') then
-                grd%array = permute(return_normal(grad_rho), 321)
-                grd%array = return_normal(grd%array)
-                call grd%output(tidy(dir_working)//'/shot_'//tidy(num2str(sgmtr%id, '(i)'))//'_grad_rho.grd')
-            end if
+            grd%array = permute(return_normal(grad_rho), 321)
+            grd%array = return_normal(grd%array)
+            call grd%output(tidy(dir_working)//'/shot_'//tidy(num2str(sgmtr%id, '(i)'))//'_grad_rho.grd')
 
         end if
 
@@ -304,274 +276,88 @@ contains
     subroutine compute_gradient
 
         integer :: i, j, k
-        integer :: sgnh
 
         ! Vp
-        if (kernel_v /= '') then
+        !$omp parallel do private(i, j, k) collapse(3)
+        do k = nz1, nz2
+            do j = ny1, ny2
+                do i = nx1, nx2
+                    src_p(i, j, k) = p(i, j, k) - prev_p(i, j, k)
+                    rec_p(i, j, k) = pr(i, j, k)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+        !$omp parallel do private(i, j, k) collapse(3)
+        do k = nz1_interior, nz2_interior
+            do j = ny1_interior, ny2_interior
+                do i = nx1_interior, nx2_interior
+                    grad_vp(i, j, k) = grad_vp(i, j, k) - src_p(i, j, k)*rec_p(i, j, k)/(rho(i, j, k)*vp(i, j, k)**3)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+        if (yn_energy_precond) then
 
             !$omp parallel do private(i, j, k) collapse(3)
-            do k = nz1, nz2
-                do j = ny1, ny2
-                    do i = nx1, nx2
-                        src_p(i, j, k) = p(i, j, k) - prev_p(i, j, k)
-                        rec_p(i, j, k) = pr(i, j, k)
+            do k = nz1_interior, nz2_interior
+                do j = ny1_interior, ny2_interior
+                    do i = nx1_interior, nx2_interior
+                        energy_src_v(i, j, k) = energy_src_v(i, j, k) + src_p(i, j, k)**2/(rho(i, j, k)*vp(i, j, k)**3)
+                        energy_rec_v(i, j, k) = energy_rec_v(i, j, k) + rec_p(i, j, k)**2/(rho(i, j, k)*vp(i, j, k)**3)
                     end do
                 end do
             end do
             !$omp end parallel do
-
-            if (kernel_v == 'full') then
-
-                !$omp parallel do private(i, j, k) collapse(3)
-                do k = nz1_interior, nz2_interior
-                    do j = ny1_interior, ny2_interior
-                        do i = nx1_interior, nx2_interior
-                            grad_vp(i, j, k) = grad_vp(i, j, k) - src_p(i, j, k)*rec_p(i, j, k)/(rho(i, j, k)*vp(i, j, k)**3)
-                        end do
-                    end do
-                end do
-                !$omp end parallel do
-
-            else
-
-                ! Along x
-                if (index(kernel_v, 'lowx') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_v, 'highx') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    call commute_array(src_p, htlen, dim=1)
-                    call commute_array(rec_p, htlen, dim=1)
-                    src_hilbert = compute_hilbert_transform(src_p, dim=1)
-                    rec_hilbert = compute_hilbert_transform(rec_p, dim=1)
-                    grad_vp(interior_region) = grad_vp(interior_region) &
-                        - compute_directional_gradient(src_p, rec_p, src_hilbert, rec_hilbert, sgnh, dim=1) &
-                        /(rho(interior_region)*vp(interior_region)**3)
-
-                end if
-
-                ! Along y
-                if (index(kernel_v, 'lowy') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_v, 'highy') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    call commute_array(src_p, htlen, dim=2)
-                    call commute_array(rec_p, htlen, dim=2)
-                    src_hilbert = compute_hilbert_transform(src_p, dim=2)
-                    rec_hilbert = compute_hilbert_transform(rec_p, dim=2)
-                    grad_vp(interior_region) = grad_vp(interior_region) &
-                        -compute_directional_gradient(src_p, rec_p, src_hilbert, rec_hilbert, sgnh, dim=2) &
-                        /(rho(interior_region)*vp(interior_region)**3)
-
-                end if
-
-                ! Along z
-                if (index(kernel_v, 'lowz') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_v, 'highz') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    call commute_array(src_p, htlen, dim=3)
-                    call commute_array(rec_p, htlen, dim=3)
-                    src_hilbert = compute_hilbert_transform(src_p, dim=3)
-                    rec_hilbert = compute_hilbert_transform(rec_p, dim=3)
-                    grad_vp(interior_region) = grad_vp(interior_region) &
-                        -compute_directional_gradient(src_p, rec_p, src_hilbert, rec_hilbert, sgnh, dim=3) &
-                        /(rho(interior_region)*vp(interior_region)**3)
-
-                end if
-
-            end if
-
-            if (yn_energy_precond) then
-
-                !$omp parallel do private(i, j, k) collapse(3)
-                do k = nz1_interior, nz2_interior
-                    do j = ny1_interior, ny2_interior
-                        do i = nx1_interior, nx2_interior
-                            energy_src_v(i, j, k) = energy_src_v(i, j, k) + src_p(i, j, k)**2/(rho(i, j, k)*vp(i, j, k)**3)
-                            energy_rec_v(i, j, k) = energy_rec_v(i, j, k) + rec_p(i, j, k)**2/(rho(i, j, k)*vp(i, j, k)**3)
-                        end do
-                    end do
-                end do
-                !$omp end parallel do
-
-            end if
 
         end if
 
         ! Density
-        if (kernel_a /= '') then
+        !$omp parallel do private(i, j, k) collapse(3)
+        do k = nz1, nz2
+            do j = ny1, ny2
+                do i = nx1, nx2
+                    src_vx(i, j, k) = sum(vx(i:i + 1, j, k)) - sum(prev_vx(i:i + 1, j, k))
+                    rec_vx(i, j, k) = sum(vxr(i:i + 1, j, k))
+                    src_vy(i, j, k) = sum(vy(i, j:j + 1, k)) - sum(prev_vy(i, j:j + 1, k))
+                    rec_vy(i, j, k) = sum(vyr(i, j:j + 1, k))
+                    src_vz(i, j, k) = sum(vz(i, j, k:k + 1)) - sum(prev_vz(i, j, k:k + 1))
+                    rec_vz(i, j, k) = sum(vzr(i, j, k:k + 1))
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+        !$omp parallel do private(i, j, k) collapse(3)
+        do k = nz1_interior, nz2_interior
+            do j = ny1_interior, ny2_interior
+                do i = nx1_interior, nx2_interior
+                    grad_rho(i, j, k) = grad_rho(i, j, k) + src_vx(i, j, k)*rec_vx(i, j, k) &
+                        + src_vy(i, j, k)*rec_vy(i, j, k) + src_vz(i, j, k)*rec_vz(i, j, k)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+        if (yn_energy_precond) then
 
             !$omp parallel do private(i, j, k) collapse(3)
-            do k = nz1, nz2
-                do j = ny1, ny2
-                    do i = nx1, nx2
-                        src_vx(i, j, k) = sum(vx(i:i + 1, j, k)) - sum(prev_vx(i:i + 1, j, k))
-                        rec_vx(i, j, k) = sum(vxr(i:i + 1, j, k))
-                        src_vy(i, j, k) = sum(vy(i, j:j + 1, k)) - sum(prev_vy(i, j:j + 1, k))
-                        rec_vy(i, j, k) = sum(vyr(i, j:j + 1, k))
-                        src_vz(i, j, k) = sum(vz(i, j, k:k + 1)) - sum(prev_vz(i, j, k:k + 1))
-                        rec_vz(i, j, k) = sum(vzr(i, j, k:k + 1))
+            do k = nz1_interior, nz2_interior
+                do j = ny1_interior, ny2_interior
+                    do i = nx1_interior, nx2_interior
+                        energy_src_a(i, j, k) = energy_src_a(i, j, k) &
+                            + src_vx(i, j, k)**2 + src_vy(i, j, k)**2 + src_vz(i, j, k)**2
+                        energy_rec_a(i, j, k) = energy_rec_a(i, j, k) &
+                            + rec_vx(i, j, k)**2 + src_vy(i, j, k)**2 + rec_vz(i, j, k)**2
                     end do
                 end do
             end do
             !$omp end parallel do
 
-            if (kernel_a == 'full') then
-
-                !$omp parallel do private(i, j, k) collapse(3)
-                do k = nz1_interior, nz2_interior
-                    do j = ny1_interior, ny2_interior
-                        do i = nx1_interior, nx2_interior
-                            grad_rho(i, j, k) = grad_rho(i, j, k) + src_vx(i, j, k)*rec_vx(i, j, k) &
-                                + src_vy(i, j, k)*rec_vy(i, j, k) + src_vz(i, j, k)*rec_vz(i, j, k)
-                        end do
-                    end do
-                end do
-                !$omp end parallel do
-
-            else
-
-                ! Along x
-                if (index(kernel_a, 'lowx') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_a, 'highx') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    call commute_array(src_vx, htlen, dim=1)
-                    call commute_array(rec_vx, htlen, dim=1)
-                    src_hilbert = compute_hilbert_transform(src_vx, dim=1)
-                    rec_hilbert = compute_hilbert_transform(rec_vx, dim=1)
-                    grad_rho(interior_region) = grad_rho(interior_region) &
-                        + compute_directional_gradient(src_vx, rec_vx, src_hilbert, rec_hilbert, sgnh, dim=1)
-
-                    call commute_array(src_vy, htlen, dim=1)
-                    call commute_array(rec_vy, htlen, dim=1)
-                    src_hilbert = compute_hilbert_transform(src_vy, dim=1)
-                    rec_hilbert = compute_hilbert_transform(rec_vy, dim=1)
-                    grad_rho(interior_region) = grad_rho(interior_region) &
-                        + compute_directional_gradient(src_vy, rec_vy, src_hilbert, rec_hilbert, sgnh, dim=1)
-
-                    call commute_array(src_vz, htlen, dim=1)
-                    call commute_array(rec_vz, htlen, dim=1)
-                    src_hilbert = compute_hilbert_transform(src_vz, dim=1)
-                    rec_hilbert = compute_hilbert_transform(rec_vz, dim=1)
-                    grad_rho(interior_region) = grad_rho(interior_region) &
-                        + compute_directional_gradient(src_vz, rec_vz, src_hilbert, rec_hilbert, sgnh, dim=1)
-
-                end if
-
-                ! Along y
-                if (index(kernel_a, 'lowy') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_a, 'highy') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    call commute_array(src_vx, htlen, dim=2)
-                    call commute_array(rec_vx, htlen, dim=2)
-                    src_hilbert = compute_hilbert_transform(src_vx, dim=2)
-                    rec_hilbert = compute_hilbert_transform(rec_vx, dim=2)
-                    grad_rho(interior_region) = grad_rho(interior_region) &
-                        + compute_directional_gradient(src_vx, rec_vx, src_hilbert, rec_hilbert, sgnh, dim=2)
-
-                    call commute_array(src_vy, htlen, dim=2)
-                    call commute_array(rec_vy, htlen, dim=2)
-                    src_hilbert = compute_hilbert_transform(src_vy, dim=2)
-                    rec_hilbert = compute_hilbert_transform(rec_vy, dim=2)
-                    grad_rho(interior_region) = grad_rho(interior_region) &
-                        + compute_directional_gradient(src_vy, rec_vy, src_hilbert, rec_hilbert, sgnh, dim=2)
-
-                    call commute_array(src_vz, htlen, dim=2)
-                    call commute_array(rec_vz, htlen, dim=2)
-                    src_hilbert = compute_hilbert_transform(src_vz, dim=2)
-                    rec_hilbert = compute_hilbert_transform(rec_vz, dim=2)
-                    grad_rho(interior_region) = grad_rho(interior_region) &
-                        + compute_directional_gradient(src_vz, rec_vz, src_hilbert, rec_hilbert, sgnh, dim=2)
-
-                end if
-
-                ! Along z
-                if (index(kernel_a, 'lowz') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_a, 'highz') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    call commute_array(src_vx, htlen, dim=3)
-                    call commute_array(rec_vx, htlen, dim=3)
-                    src_hilbert = compute_hilbert_transform(src_vx, dim=3)
-                    rec_hilbert = compute_hilbert_transform(rec_vx, dim=3)
-                    grad_rho(interior_region) = grad_rho(interior_region) &
-                        + compute_directional_gradient(src_vx, rec_vx, src_hilbert, rec_hilbert, sgnh, dim=3)
-
-                    call commute_array(src_vy, htlen, dim=3)
-                    call commute_array(rec_vy, htlen, dim=3)
-                    src_hilbert = compute_hilbert_transform(src_vy, dim=3)
-                    rec_hilbert = compute_hilbert_transform(rec_vy, dim=3)
-                    grad_rho(interior_region) = grad_rho(interior_region) &
-                        + compute_directional_gradient(src_vy, rec_vy, src_hilbert, rec_hilbert, sgnh, dim=3)
-
-                    call commute_array(src_vz, htlen, dim=3)
-                    call commute_array(rec_vz, htlen, dim=3)
-                    src_hilbert = compute_hilbert_transform(src_vz, dim=3)
-                    rec_hilbert = compute_hilbert_transform(rec_vz, dim=3)
-                    grad_rho(interior_region) = grad_rho(interior_region) &
-                        + compute_directional_gradient(src_vz, rec_vz, src_hilbert, rec_hilbert, sgnh, dim=3)
-
-                end if
-
-            end if
-
-            if (yn_energy_precond) then
-
-                !$omp parallel do private(i, j, k) collapse(3)
-                do k = nz1_interior, nz2_interior
-                    do j = ny1_interior, ny2_interior
-                        do i = nx1_interior, nx2_interior
-                            energy_src_a(i, j, k) = energy_src_a(i, j, k) + src_vx(i, j, k)**2 + src_vy(i, j, k)**2 + src_vz(i, j, k)**2
-                            energy_rec_a(i, j, k) = energy_rec_a(i, j, k) + rec_vx(i, j, k)**2 + src_vy(i, j, k)**2 + rec_vz(i, j, k)**2
-                        end do
-                    end do
-                end do
-                !$omp end parallel do
-
-            end if
-
         end if
 
     end subroutine
-
-#include '../../lib/inc_directional_gradient.f90'
 
 end submodule

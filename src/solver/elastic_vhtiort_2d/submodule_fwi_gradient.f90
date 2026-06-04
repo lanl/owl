@@ -45,8 +45,6 @@ contains
         call alloc_adjoint_wavefield
 
         yn_energy_precond = this%energy_precond
-        kernel_v = this%kernel_v
-        kernel_a = this%kernel_a
 
         ! Adjoint source
         if (yn_compx) then
@@ -304,22 +302,18 @@ contains
         ! Output medium parameter gradient
         if (yn_energy_precond) then
 
-            if (kernel_v /= '') then
-                energy_src_v = energy_src_v + 1.0e-3*maxval(energy_src_v)
-                energy_rec_v = energy_rec_v + 1.0e-3*maxval(energy_rec_v)
-                energy_src_v = sqrt(energy_src_v*energy_rec_v)
-                grad_c11 = grad_c11/energy_src_v
-                grad_c13 = grad_c13/energy_src_v
-                grad_c33 = grad_c33/energy_src_v
-                grad_c55 = grad_c55/energy_src_v
-            end if
+            energy_src_v = energy_src_v + 1.0e-3*maxval(energy_src_v)
+            energy_rec_v = energy_rec_v + 1.0e-3*maxval(energy_rec_v)
+            energy_src_v = sqrt(energy_src_v*energy_rec_v)
+            grad_c11 = grad_c11/energy_src_v
+            grad_c13 = grad_c13/energy_src_v
+            grad_c33 = grad_c33/energy_src_v
+            grad_c55 = grad_c55/energy_src_v
 
-            if (kernel_a /= '') then
-                energy_src_a = energy_src_a + 1.0e-3*maxval(energy_src_a)
-                energy_rec_a = energy_rec_a + 1.0e-3*maxval(energy_rec_a)
-                energy_src_a = sqrt(energy_src_a*energy_rec_a)
-                grad_rho = grad_rho/energy_src_a
-            end if
+            energy_src_a = energy_src_a + 1.0e-3*maxval(energy_src_a)
+            energy_rec_a = energy_rec_a + 1.0e-3*maxval(energy_rec_a)
+            energy_src_a = sqrt(energy_src_a*energy_rec_a)
+            grad_rho = grad_rho/energy_src_a
 
         end if
 
@@ -328,15 +322,11 @@ contains
 
         ! For free-surface model, map computed gradients to regular mesh
         if (yn_free_surface) then
-            if (kernel_v /= '') then
-                call map_irregular_to_regular(grad_c11, this, [1, nx, 1, nz])
-                call map_irregular_to_regular(grad_c13, this, [1, nx, 1, nz])
-                call map_irregular_to_regular(grad_c33, this, [1, nx, 1, nz])
-                call map_irregular_to_regular(grad_c55, this, [1, nx, 1, nz])
-            end if
-            if (kernel_a /= '') then
-                call map_irregular_to_regular(grad_rho, this, [1, nx, 1, nz])
-            end if
+            call map_irregular_to_regular(grad_c11, this, [1, nx, 1, nz])
+            call map_irregular_to_regular(grad_c13, this, [1, nx, 1, nz])
+            call map_irregular_to_regular(grad_c33, this, [1, nx, 1, nz])
+            call map_irregular_to_regular(grad_c55, this, [1, nx, 1, nz])
+            call map_irregular_to_regular(grad_rho, this, [1, nx, 1, nz])
         end if
 
         ! Output
@@ -481,7 +471,6 @@ contains
     subroutine compute_gradient
 
         integer :: i, j
-        integer :: sgnh
         real :: tmpxx, tmpzz, tmpxz, tmpxxr, tmpzzr, tmpxzr
 
         !$omp parallel do private(i, j, tmpxx, tmpzz, tmpxz, tmpxxr, tmpzzr, tmpxzr) collapse(2) schedule(auto)
@@ -507,241 +496,61 @@ contains
         end do
         !$omp end parallel do
 
-        if (kernel_v /= '') then
+        !$omp parallel do private(i, j) collapse(2) schedule(auto)
+        do j = 1, nz
+            do i = 1, nx
 
-            if (kernel_v == 'full') then
+                grad_c11(i, j) = grad_c11(i, j) - (strainxxr(i, j)*strainxx(i, j))
+                grad_c13(i, j) = grad_c13(i, j) - (strainxxr(i, j)*strainzz(i, j) + strainzzr(i, j)*strainxx(i, j))
+                grad_c33(i, j) = grad_c33(i, j) - (strainzzr(i, j)*strainzz(i, j))
+                grad_c55(i, j) = grad_c55(i, j) - (strainxzr(i, j)*strainxz(i, j))
 
-                !$omp parallel do private(i, j) collapse(2) schedule(auto)
-                do j = 1, nz
-                    do i = 1, nx
+            end do
+        end do
+        !$omp end parallel do
 
-                        grad_c11(i, j) = grad_c11(i, j) - (strainxxr(i, j)*strainxx(i, j))
-                        grad_c13(i, j) = grad_c13(i, j) - (strainxxr(i, j)*strainzz(i, j) + strainzzr(i, j)*strainxx(i, j))
-                        grad_c33(i, j) = grad_c33(i, j) - (strainzzr(i, j)*strainzz(i, j))
-                        grad_c55(i, j) = grad_c55(i, j) - (strainxzr(i, j)*strainxz(i, j))
-
-                    end do
-                end do
-                !$omp end parallel do
-
-            else
-
-                ! Along x
-                if (index(kernel_v, 'lowx') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_v, 'highx') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    !$omp parallel do private(i, j, &
-                        !$omp strainxx_lrsh, strainxx_lrrh, &
-                        !$omp strainzz_lrsh, strainzz_lrrh, &
-                        !$omp strainxz_lrsh, strainxz_lrrh) schedule(auto)
-                    do j = 1, nz
-
-                        strainxx_lrsh = strainxx(:, j)
-                        strainzz_lrsh = strainzz(:, j)
-                        strainxz_lrsh = strainxz(:, j)
-                        strainxx_lrrh = strainxxr(:, j)
-                        strainzz_lrrh = strainzzr(:, j)
-                        strainxz_lrrh = strainxzr(:, j)
-
-                        call hilbert_transform(strainxx_lrsh)
-                        call hilbert_transform(strainzz_lrsh)
-                        call hilbert_transform(strainxz_lrsh)
-                        call hilbert_transform(strainxx_lrrh)
-                        call hilbert_transform(strainzz_lrrh)
-                        call hilbert_transform(strainxz_lrrh)
-
-                        grad_c11(1:nx, j) = grad_c11(1:nx, j) &
-                            - (strainxx(1:nx, j)*strainxxr(1:nx, j) + sgnh*strainxx_lrsh(1:nx)*strainxx_lrrh(1:nx))
-                        grad_c13(1:nx, j) = grad_c13(1:nx, j) &
-                            - (strainxx(1:nx, j)*strainzzr(1:nx, j) + sgnh*strainxx_lrsh(1:nx)*strainzz_lrrh(1:nx)) &
-                            - (strainzz(1:nx, j)*strainxxr(1:nx, j) + sgnh*strainzz_lrsh(1:nx)*strainxx_lrrh(1:nx))
-                        grad_c33(1:nx, j) = grad_c33(1:nx, j) &
-                            - (strainzz(1:nx, j)*strainzzr(1:nx, j) + sgnh*strainzz_lrsh(1:nx)*strainzz_lrrh(1:nx))
-                        grad_c55(1:nx, j) = grad_c55(1:nx, j) &
-                            - (strainxz(1:nx, j)*strainxzr(1:nx, j) + sgnh*strainxz_lrsh(1:nx)*strainxz_lrrh(1:nx))
-
-                    end do
-                    !$omp end parallel do
-
-                end if
-
-                ! Along z
-                if (index(kernel_v, 'lowz') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_v, 'highz') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    !$omp parallel do private(i, j, &
-                        !$omp strainxx_udsh, strainxx_udrh, &
-                        !$omp strainzz_udsh, strainzz_udrh, &
-                        !$omp strainxz_udsh, strainxz_udrh) schedule(auto)
-                    do i = 1, nx
-
-                        strainxx_udsh = strainxx(i, :)
-                        strainzz_udsh = strainzz(i, :)
-                        strainxz_udsh = strainxz(i, :)
-                        strainxx_udrh = strainxxr(i, :)
-                        strainzz_udrh = strainzzr(i, :)
-                        strainxz_udrh = strainxzr(i, :)
-
-                        call hilbert_transform(strainxx_udsh)
-                        call hilbert_transform(strainzz_udsh)
-                        call hilbert_transform(strainxz_udsh)
-                        call hilbert_transform(strainxx_udrh)
-                        call hilbert_transform(strainzz_udrh)
-                        call hilbert_transform(strainxz_udrh)
-
-                        grad_c11(i, 1:nz) = grad_c11(i, 1:nz) &
-                            - (strainxx(i, 1:nz)*strainxxr(i, 1:nz) + sgnh*strainxx_udsh(1:nz)*strainxx_udrh(1:nz))
-                        grad_c13(i, 1:nz) = grad_c13(i, 1:nz) &
-                            - (strainxx(i, 1:nz)*strainzzr(i, 1:nz) + sgnh*strainxx_udsh(1:nz)*strainzz_udrh(1:nz)) &
-                            - (strainzz(i, 1:nz)*strainxxr(i, 1:nz) + sgnh*strainzz_udsh(1:nz)*strainxx_udrh(1:nz))
-                        grad_c33(i, 1:nz) = grad_c33(i, 1:nz) &
-                            - (strainzz(i, 1:nz)*strainzzr(i, 1:nz) + sgnh*strainzz_udsh(1:nz)*strainzz_udrh(1:nz))
-                        grad_c55(i, 1:nz) = grad_c55(i, 1:nz) &
-                            - (strainxz(i, 1:nz)*strainxzr(i, 1:nz) + sgnh*strainxz_udsh(1:nz)*strainxz_udrh(1:nz))
-
-                    end do
-                    !$omp end parallel do
-
-                end if
-
-            end if
-
-            if (yn_energy_precond) then
-
-                !$omp parallel do private(i, j) collapse(2) schedule(auto)
-                do j = 1, nz
-                    do i = 1, nx
-                        energy_src_v(i, j) = energy_src_v(i, j) + strainxx(i, j)**2 + strainzz(i, j)**2 + 2*strainxz(i, j)**2
-                        energy_rec_v(i, j) = energy_rec_v(i, j) + strainxxr(i, j)**2 + strainzzr(i, j)**2 + 2*strainxzr(i, j)**2
-                    end do
-                end do
-                !$omp end parallel do
-
-            end if
-
-        end if
-
-        if (kernel_a /= '') then
+        if (yn_energy_precond) then
 
             !$omp parallel do private(i, j) collapse(2) schedule(auto)
-            do j = -pml + 1, nz + pml
-                do i = -pml + 1, nx + pml
-                    src_vx(i, j) = sum(vx(i:i + 1, j)) - sum(prev_vx(i:i + 1, j))
-                    rec_vx(i, j) = sum(vxr(i:i + 1, j))
-                    src_vz(i, j) = sum(vz(i, j:j + 1)) - sum(prev_vz(i, j:j + 1))
-                    rec_vz(i, j) = sum(vzr(i, j:j + 1))
+            do j = 1, nz
+                do i = 1, nx
+                    energy_src_v(i, j) = energy_src_v(i, j) + strainxx(i, j)**2 + strainzz(i, j)**2 + 2*strainxz(i, j)**2
+                    energy_rec_v(i, j) = energy_rec_v(i, j) + strainxxr(i, j)**2 + strainzzr(i, j)**2 + 2*strainxzr(i, j)**2
                 end do
             end do
             !$omp end parallel do
 
-            if (kernel_a == 'full') then
+        end if
 
-                !$omp parallel do private(i, j) collapse(2) schedule(auto)
-                do j = 1, nz
-                    do i = 1, nx
-                        grad_rho(i, j) = grad_rho(i, j) + src_vx(i, j)*rec_vx(i, j) + src_vz(i, j)*rec_vz(i, j)
-                    end do
+        !$omp parallel do private(i, j) collapse(2) schedule(auto)
+        do j = -pml + 1, nz + pml
+            do i = -pml + 1, nx + pml
+                src_vx(i, j) = sum(vx(i:i + 1, j)) - sum(prev_vx(i:i + 1, j))
+                rec_vx(i, j) = sum(vxr(i:i + 1, j))
+                src_vz(i, j) = sum(vz(i, j:j + 1)) - sum(prev_vz(i, j:j + 1))
+                rec_vz(i, j) = sum(vzr(i, j:j + 1))
+            end do
+        end do
+        !$omp end parallel do
+
+        !$omp parallel do private(i, j) collapse(2) schedule(auto)
+        do j = 1, nz
+            do i = 1, nx
+                grad_rho(i, j) = grad_rho(i, j) + src_vx(i, j)*rec_vx(i, j) + src_vz(i, j)*rec_vz(i, j)
+            end do
+        end do
+        !$omp end parallel do
+
+        if (yn_energy_precond) then
+
+            !$omp parallel do private(i, j) collapse(2) schedule(auto)
+            do j = 1, nz
+                do i = 1, nx
+                    energy_src_a(i, j) = energy_src_a(i, j) + src_vx(i, j)**2 + src_vz(i, j)**2
+                    energy_rec_a(i, j) = energy_rec_a(i, j) + rec_vx(i, j)**2 + rec_vz(i, j)**2
                 end do
-                !$omp end parallel do
-
-            else
-
-                ! Along x
-                if (index(kernel_a, 'lowx') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_a, 'highx') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    !$omp parallel do private(j, p_lrsh, p_lrrh) schedule(auto)
-                    do j = 1, nz
-
-                        p_lrsh = src_vx(-pml + 1:nx + pml, j)
-                        p_lrrh = rec_vx(-pml + 1:nx + pml, j)
-                        call hilbert_transform(p_lrsh)
-                        call hilbert_transform(p_lrrh)
-
-                        grad_rho(1:nx, j) = grad_rho(1:nx, j) &
-                            + (src_vx(1:nx, j)*rec_vx(1:nx, j) + sgnh*p_lrsh(1:nx)*p_lrrh(1:nx))
-
-                        p_lrsh = src_vz(-pml + 1:nx + pml, j)
-                        p_lrrh = rec_vz(-pml + 1:nx + pml, j)
-                        call hilbert_transform(p_lrsh)
-                        call hilbert_transform(p_lrrh)
-
-                        grad_rho(1:nx, j) = grad_rho(1:nx, j) &
-                            + (src_vz(1:nx, j)*rec_vz(1:nx, j) + sgnh*p_lrsh(1:nx)*p_lrrh(1:nx))
-
-                    end do
-                    !$omp end parallel do
-
-                end if
-
-                ! Along z
-                if (index(kernel_a, 'lowz') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_a, 'highz') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    !$omp parallel do private(i, p_udsh, p_udrh) schedule(auto)
-                    do i = 1, nx
-
-                        p_udsh = src_vx(i, -pml + 1:nz + pml)
-                        p_udrh = rec_vx(i, -pml + 1:nz + pml)
-                        call hilbert_transform(p_udsh)
-                        call hilbert_transform(p_udrh)
-                        grad_rho(i, 1:nz) = grad_rho(i, 1:nz) &
-                            + (src_vx(i, 1:nz)*rec_vx(i, 1:nz) + sgnh*p_udsh(1:nz)*p_udrh(1:nz))
-
-                        p_udsh = src_vz(i, -pml + 1:nz + pml)
-                        p_udrh = rec_vz(i, -pml + 1:nz + pml)
-                        call hilbert_transform(p_udsh)
-                        call hilbert_transform(p_udrh)
-                        grad_rho(i, 1:nz) = grad_rho(i, 1:nz) &
-                            + (src_vz(i, 1:nz)*rec_vz(i, 1:nz) + sgnh*p_udsh(1:nz)*p_udrh(1:nz))
-
-                    end do
-                    !$omp end parallel do
-
-                end if
-
-            end if
-
-            if (yn_energy_precond) then
-
-                !$omp parallel do private(i, j) collapse(2) schedule(auto)
-                do j = 1, nz
-                    do i = 1, nx
-                        energy_src_a(i, j) = energy_src_a(i, j) + src_vx(i, j)**2 + src_vz(i, j)**2
-                        energy_rec_a(i, j) = energy_rec_a(i, j) + rec_vx(i, j)**2 + rec_vz(i, j)**2
-                    end do
-                end do
-                !$omp end parallel do
-
-            end if
+            end do
+            !$omp end parallel do
 
         end if
 

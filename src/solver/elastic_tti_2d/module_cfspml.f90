@@ -421,8 +421,11 @@ contains
                         zdisth = abs((j - nz - 0.5d0)/pml)
                     end if
 
-                    ! compute only for boundaries
+                    ! Compute only for boundaries
                     if (.not. (i > 1 .and. i < nx .and. j > 1 .and. j < nz)) then
+
+                        ratiox = 0.0d0
+                        ratioz = 0.0d0
 
                         ! integer-integer
                         if (i <= 1) then
@@ -506,8 +509,11 @@ contains
                         zdisth = abs((j - nz - 0.5d0)/pml)
                     end if
 
-                    ! compute only for boundaries
+                    ! Compute only for boundaries
                     if (.not. (i > 1 .and. i < nx .and. j > 1 .and. j < nz)) then
+
+                        ratiox = 0.0d0
+                        ratioz = 0.0d0
 
                         ! integer-integer
                         if (i <= 1) then

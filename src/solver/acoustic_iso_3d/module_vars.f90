@@ -92,9 +92,6 @@ module acoustic_iso_3d_vars
 
     logical :: yn_energy_precond = .true.
 
-    character(len=24) :: kernel_v = 'full'
-    character(len=24) :: kernel_a = 'full'
-
     character(len=1024) :: dir_synthetic, dir_snapshot, dir_working, dir_adjoint
 
     integer :: nx1, nx2, ny1, ny2, nz1, nz2

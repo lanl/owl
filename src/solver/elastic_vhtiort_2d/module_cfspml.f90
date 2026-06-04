@@ -284,12 +284,10 @@ contains
     !
     subroutine damp_coef(vpx, vpz, ax, az, bx, bz, kx, kz, xdist, zdist, dx, dz, ratiox, ratioz)
 
-        ! arguments
         real, intent(in) :: vpx, vpz, dx, dz, ratiox, ratioz
         real, intent(inout) :: ax, az, bx, bz, kx, kz
         real, intent(in) :: xdist, zdist
 
-        ! local variables
         real :: dampx, dampz
         real :: alphax, alphaz
         real :: nd
@@ -356,7 +354,7 @@ contains
             call compute_damping_profile_ratio
         end if
 
-        ! allocate memory for coefficient arrays
+        ! Allocate memory for coefficient arrays
         call alloc_array(axii, [1, nx, 1, nz], pad=pml)
         call alloc_array(axih, [1, nx, 1, nz], pad=pml)
         call alloc_array(axhi, [1, nx, 1, nz], pad=pml)
@@ -426,8 +424,11 @@ contains
                         zdisth = abs((j - nz - 0.5d0)/pml)
                     end if
 
-                    ! compute only for boundaries
+                    ! Compute only for boundaries
                     if (.not. (i > 1 .and. i < nx .and. j > 1 .and. j < nz)) then
+
+                        ratiox = 0.0d0
+                        ratioz = 0.0d0
 
                         ! integer-integer
                         if (i <= 1) then
@@ -511,8 +512,11 @@ contains
                         zdisth = abs((j - nz - 0.5d0)/pml)
                     end if
 
-                    ! compute only for boundaries
+                    ! Compute only for boundaries
                     if (.not. (i > 1 .and. i < nx .and. j > 1 .and. j < nz)) then
+
+                        ratiox = 0.0d0
+                        ratioz = 0.0d0
 
                         ! integer-integer
                         if (i <= 1) then

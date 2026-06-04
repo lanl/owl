@@ -52,8 +52,6 @@ module elastic_tti_2d
         logical :: reconstruct = .false.
 
         character(len=12) :: anisotropy_type = 'iso'
-        character(len=24) :: kernel_v = 'full'
-        character(len=24) :: kernel_a = 'full'
 
         type(su) :: seis_vx, seis_vz, seis_vxr, seis_vzr
 

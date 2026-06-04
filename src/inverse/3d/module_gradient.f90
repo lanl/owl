@@ -80,19 +80,6 @@ contains
         ! Enforce Vp/Vs ratio in an appropriate range
         call clip_vpvsratio
 
-        call readpar_xstring(file_parameter, 'kernel_v', kernel_v, 'full', iter*1.0)
-        call readpar_xstring(file_parameter, 'kernel_a', kernel_a, 'full', iter*1.0)
-
-        if (iter > 1) then
-            call readpar_xstring(file_parameter, 'kernel_v', prev_kernel_v, 'full', iter - 1.0)
-            call readpar_xstring(file_parameter, 'kernel_a', prev_kernel_a, 'full', iter - 1.0)
-            if (prev_kernel_v /= kernel_v .or. prev_kernel_a /= kernel_v) then
-                kernel_type_changed = .true.
-            else
-                kernel_type_changed = .false.
-            end if
-        end if
-
         ! Show the medium parameter statistics
         if (rankid == 0) then
             do i = 1, nmodel
@@ -409,27 +396,18 @@ contains
                     solver_acoustic_iso%dir_adjoint = tidy(dir_adjoint)
                     solver_acoustic_iso%cc_step_interval = cc_step_interval
                     solver_acoustic_iso%energy_precond = yn_energy_precond
-                    solver_acoustic_iso%kernel_v = kernel_v
-                    solver_acoustic_iso%kernel_a = kernel_a
-
                     call solver_acoustic_iso%adjoint
 
                 case ('elastic-iso', 'elastic-vhtiort')
                     solver_elastic_vhtiort%dir_adjoint = tidy(dir_adjoint)
                     solver_elastic_vhtiort%cc_step_interval = cc_step_interval
                     solver_elastic_vhtiort%energy_precond = yn_energy_precond
-                    solver_elastic_vhtiort%kernel_v = kernel_v
-                    solver_elastic_vhtiort%kernel_a = kernel_a
-
                     call solver_elastic_vhtiort%adjoint
 
                 case ('elastic-tti')
                     solver_elastic_tti%dir_adjoint = tidy(dir_adjoint)
                     solver_elastic_tti%cc_step_interval = cc_step_interval
                     solver_elastic_tti%energy_precond = yn_energy_precond
-                    solver_elastic_tti%kernel_v = kernel_v
-                    solver_elastic_tti%kernel_a = kernel_a
-
                     call solver_elastic_tti%adjoint
 
             end select

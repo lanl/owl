@@ -254,7 +254,6 @@ contains
         character(len=*), intent(in), optional :: order
 
         real, allocatable, dimension(:, :) :: c, a
-        real, allocatable, dimension(:, :) :: rx, ry, rz
         character(len=3) :: rotation_order
 
         if (present(order)) then
@@ -266,23 +265,7 @@ contains
         ! Rotation matrix
         ! Note that to rotate a VTI medium, the first rotation cannot be around z;
         ! otherwise, the azimuth angle does not act at all since VTI is symmetric in the x-y plane
-        rx = rotation_matrix(thetax, 'x')
-        ry = rotation_matrix(thetay, 'y')
-        rz = rotation_matrix(thetaz, 'z')
-        select case (rotation_order)
-            case ('xyz')
-                a = bond_matrix(matmul(rz, matmul(ry, rx)))
-            case ('xzy')
-                a = bond_matrix(matmul(ry, matmul(rz, rx)))
-            case ('yxz')
-                a = bond_matrix(matmul(rz, matmul(rx, ry)))
-            case ('yzx')
-                a = bond_matrix(matmul(rx, matmul(rz, ry)))
-            case ('zxy')
-                a = bond_matrix(matmul(ry, matmul(rx, rz)))
-            case ('zyx')
-                a = bond_matrix(matmul(rx, matmul(ry, rz)))
-        end select
+        a = bond_matrix(rotation_matrix([thetax, thetay, thetaz], rotation_order))
 
         ! Elasticity matrix
         c = reshape([ &

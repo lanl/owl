@@ -25,8 +25,6 @@ submodule(elastic_vhtiort_3d) elastic_vhtiort_3d_fwi_gradient
 
     implicit none
 
-#define interior_region nx1_interior:nx2_interior, ny1_interior:ny2_interior, nz1_interior:nz2_interior
-
 #include '../../lib/macro_thomsen_3d.f90'
 #include '../../lib/macro_alkhalifah_tsvankin_3d.f90'
 
@@ -50,8 +48,6 @@ contains
         call alloc_adjoint_wavefield
 
         yn_energy_precond = this%energy_precond
-        kernel_v = this%kernel_v
-        kernel_a = this%kernel_a
 
         ! Adjoint source
         if (yn_compx) then
@@ -125,63 +121,25 @@ contains
         energy_src_a = zeros(nx, ny, nz)
         energy_rec_a = zeros(nx, ny, nz)
 
-        if (kernel_v == '') then
-            call alloc_array(strainxx, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(strainyy, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(strainzz, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(strainyz, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(strainxz, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(strainxy, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(strainxxr, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(strainyyr, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(strainzzr, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(strainyzr, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(strainxzr, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(strainxyr, [nx1, nx2, ny1, ny2, nz1, nz2])
-        else
-            call alloc_array(strainxx, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainyy, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainzz, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainyz, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainxz, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainxy, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainxxr, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainyyr, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainzzr, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainyzr, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainxzr, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainxyr, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainxx_hilbert, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainyy_hilbert, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainzz_hilbert, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainyz_hilbert, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainxz_hilbert, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainxy_hilbert, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainxxr_hilbert, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainyyr_hilbert, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainzzr_hilbert, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainyzr_hilbert, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainxzr_hilbert, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(strainxyr_hilbert, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-        end if
+        call alloc_array(strainxx, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(strainyy, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(strainzz, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(strainyz, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(strainxz, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(strainxy, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(strainxxr, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(strainyyr, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(strainzzr, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(strainyzr, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(strainxzr, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(strainxyr, [nx1, nx2, ny1, ny2, nz1, nz2])
 
-        if (kernel_a == '') then
-            call alloc_array(src_vx, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(rec_vx, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(src_vy, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(rec_vy, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(src_vz, [nx1, nx2, ny1, ny2, nz1, nz2])
-            call alloc_array(rec_vz, [nx1, nx2, ny1, ny2, nz1, nz2])
-        else
-            call alloc_array(src_vx, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(rec_vx, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(src_vy, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(rec_vy, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(src_vz, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(rec_vz, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(src_hilbert, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-            call alloc_array(rec_hilbert, [nx1, nx2, ny1, ny2, nz1, nz2], pad=htlen)
-        end if
+        call alloc_array(src_vx, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(rec_vx, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(src_vy, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(rec_vy, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(src_vz, [nx1, nx2, ny1, ny2, nz1, nz2])
+        call alloc_array(rec_vz, [nx1, nx2, ny1, ny2, nz1, nz2])
 
         call alloc_array(prev_stressxx, [nx1, nx2, ny1, ny2, nz1, nz2], pad=fdhalf)
         call alloc_array(prev_stressyy, [nx1, nx2, ny1, ny2, nz1, nz2], pad=fdhalf)
@@ -487,27 +445,23 @@ contains
             call allreduce_array_group(energy_src_a)
             call allreduce_array_group(energy_rec_a)
 
-            if (kernel_v /= '') then
-                energy_src_v = energy_src_v + 1.0e-3*maxval(energy_src_v)
-                energy_rec_v = energy_rec_v + 1.0e-3*maxval(energy_rec_v)
-                energy_src_v = sqrt(energy_src_v*energy_rec_v)
-                grad_c11 = grad_c11/energy_src_v
-                grad_c12 = grad_c12/energy_src_v
-                grad_c13 = grad_c13/energy_src_v
-                grad_c22 = grad_c22/energy_src_v
-                grad_c23 = grad_c23/energy_src_v
-                grad_c33 = grad_c33/energy_src_v
-                grad_c44 = grad_c44/energy_src_v
-                grad_c55 = grad_c55/energy_src_v
-                grad_c66 = grad_c66/energy_src_v
-            end if
+            energy_src_v = energy_src_v + 1.0e-3*maxval(energy_src_v)
+            energy_rec_v = energy_rec_v + 1.0e-3*maxval(energy_rec_v)
+            energy_src_v = sqrt(energy_src_v*energy_rec_v)
+            grad_c11 = grad_c11/energy_src_v
+            grad_c12 = grad_c12/energy_src_v
+            grad_c13 = grad_c13/energy_src_v
+            grad_c22 = grad_c22/energy_src_v
+            grad_c23 = grad_c23/energy_src_v
+            grad_c33 = grad_c33/energy_src_v
+            grad_c44 = grad_c44/energy_src_v
+            grad_c55 = grad_c55/energy_src_v
+            grad_c66 = grad_c66/energy_src_v
 
-            if (kernel_a /= '') then
-                energy_src_a = energy_src_a + 1.0e-3*maxval(energy_src_a)
-                energy_rec_a = energy_rec_a + 1.0e-3*maxval(energy_rec_a)
-                energy_src_a = sqrt(energy_src_a*energy_rec_a)
-                grad_rho = grad_rho/energy_src_a
-            end if
+            energy_src_a = energy_src_a + 1.0e-3*maxval(energy_src_a)
+            energy_rec_a = energy_rec_a + 1.0e-3*maxval(energy_rec_a)
+            energy_src_a = sqrt(energy_src_a*energy_rec_a)
+            grad_rho = grad_rho/energy_src_a
 
         end if
 
@@ -519,20 +473,16 @@ contains
 
             ! For free-surface model, map computed gradients to regular mesh
             if (yn_free_surface) then
-                if (kernel_v /= '') then
-                    call map_irregular_to_regular(grad_c11, this, [1, nx, 1, ny, 1, nz])
-                    call map_irregular_to_regular(grad_c12, this, [1, nx, 1, ny, 1, nz])
-                    call map_irregular_to_regular(grad_c13, this, [1, nx, 1, ny, 1, nz])
-                    call map_irregular_to_regular(grad_c22, this, [1, nx, 1, ny, 1, nz])
-                    call map_irregular_to_regular(grad_c23, this, [1, nx, 1, ny, 1, nz])
-                    call map_irregular_to_regular(grad_c33, this, [1, nx, 1, ny, 1, nz])
-                    call map_irregular_to_regular(grad_c44, this, [1, nx, 1, ny, 1, nz])
-                    call map_irregular_to_regular(grad_c55, this, [1, nx, 1, ny, 1, nz])
-                    call map_irregular_to_regular(grad_c66, this, [1, nx, 1, ny, 1, nz])
-                end if
-                if (kernel_a /= '') then
-                    call map_irregular_to_regular(grad_rho, this, [1, nx, 1, ny, 1, nz])
-                end if
+                call map_irregular_to_regular(grad_c11, this, [1, nx, 1, ny, 1, nz])
+                call map_irregular_to_regular(grad_c12, this, [1, nx, 1, ny, 1, nz])
+                call map_irregular_to_regular(grad_c13, this, [1, nx, 1, ny, 1, nz])
+                call map_irregular_to_regular(grad_c22, this, [1, nx, 1, ny, 1, nz])
+                call map_irregular_to_regular(grad_c23, this, [1, nx, 1, ny, 1, nz])
+                call map_irregular_to_regular(grad_c33, this, [1, nx, 1, ny, 1, nz])
+                call map_irregular_to_regular(grad_c44, this, [1, nx, 1, ny, 1, nz])
+                call map_irregular_to_regular(grad_c55, this, [1, nx, 1, ny, 1, nz])
+                call map_irregular_to_regular(grad_c66, this, [1, nx, 1, ny, 1, nz])
+                call map_irregular_to_regular(grad_rho, this, [1, nx, 1, ny, 1, nz])
             end if
 
             call grd%init(n=[nz, ny, nx], d=[dz, dy, dx], o=[oz, oy, ox])
@@ -752,7 +702,6 @@ contains
     subroutine compute_gradient
 
         integer :: i, j, k
-        integer :: sgnh
         real :: tmpxx, tmpxy, tmpxz, tmpyy, tmpyz, tmpzz
         real :: tmpxxr, tmpxyr, tmpxzr, tmpyyr, tmpyzr, tmpzzr
 
@@ -795,399 +744,87 @@ contains
         end do
         !$omp end parallel do
 
-        if (kernel_v /= '') then
+        !$omp parallel do private(i, j, k) collapse(3) schedule(auto)
+        do k = nz1_interior, nz2_interior
+            do j = ny1_interior, ny2_interior
+                do i = nx1_interior, nx2_interior
 
-            if (kernel_v == 'full') then
+                    grad_c11(i, j, k) = grad_c11(i, j, k) - strainxx(i, j, k)*strainxxr(i, j, k)
+                    grad_c12(i, j, k) = grad_c12(i, j, k) - strainxx(i, j, k)*strainyyr(i, j, k) - strainyy(i, j, k)*strainxxr(i, j, k)
+                    grad_c13(i, j, k) = grad_c13(i, j, k) - strainxx(i, j, k)*strainzzr(i, j, k) - strainzz(i, j, k)*strainxxr(i, j, k)
+                    grad_c22(i, j, k) = grad_c22(i, j, k) - strainyy(i, j, k)*strainyyr(i, j, k)
+                    grad_c23(i, j, k) = grad_c23(i, j, k) - strainyy(i, j, k)*strainzzr(i, j, k) - strainzz(i, j, k)*strainyyr(i, j, k)
+                    grad_c33(i, j, k) = grad_c33(i, j, k) - strainzz(i, j, k)*strainzzr(i, j, k)
+                    grad_c44(i, j, k) = grad_c44(i, j, k) - strainyz(i, j, k)*strainyzr(i, j, k)
+                    grad_c55(i, j, k) = grad_c55(i, j, k) - strainxz(i, j, k)*strainxzr(i, j, k)
+                    grad_c66(i, j, k) = grad_c66(i, j, k) - strainxy(i, j, k)*strainxyr(i, j, k)
 
-                !$omp parallel do private(i, j, k) collapse(3) schedule(auto)
-                do k = nz1_interior, nz2_interior
-                    do j = ny1_interior, ny2_interior
-                        do i = nx1_interior, nx2_interior
-
-                            grad_c11(i, j, k) = grad_c11(i, j, k) - strainxx(i, j, k)*strainxxr(i, j, k)
-                            grad_c12(i, j, k) = grad_c12(i, j, k) - strainxx(i, j, k)*strainyyr(i, j, k) - strainyy(i, j, k)*strainxxr(i, j, k)
-                            grad_c13(i, j, k) = grad_c13(i, j, k) - strainxx(i, j, k)*strainzzr(i, j, k) - strainzz(i, j, k)*strainxxr(i, j, k)
-                            grad_c22(i, j, k) = grad_c22(i, j, k) - strainyy(i, j, k)*strainyyr(i, j, k)
-                            grad_c23(i, j, k) = grad_c23(i, j, k) - strainyy(i, j, k)*strainzzr(i, j, k) - strainzz(i, j, k)*strainyyr(i, j, k)
-                            grad_c33(i, j, k) = grad_c33(i, j, k) - strainzz(i, j, k)*strainzzr(i, j, k)
-                            grad_c44(i, j, k) = grad_c44(i, j, k) - strainyz(i, j, k)*strainyzr(i, j, k)
-                            grad_c55(i, j, k) = grad_c55(i, j, k) - strainxz(i, j, k)*strainxzr(i, j, k)
-                            grad_c66(i, j, k) = grad_c66(i, j, k) - strainxy(i, j, k)*strainxyr(i, j, k)
-
-                        end do
-                    end do
                 end do
-                !$omp end parallel do
+            end do
+        end do
+        !$omp end parallel do
 
-            else
-
-                ! Along x
-                if (index(kernel_v, 'lowx') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_v, 'highx') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    call commute_array(strainxx, htlen, dim=1)
-                    call commute_array(strainyy, htlen, dim=1)
-                    call commute_array(strainzz, htlen, dim=1)
-                    call commute_array(strainyz, htlen, dim=1)
-                    call commute_array(strainxz, htlen, dim=1)
-                    call commute_array(strainxy, htlen, dim=1)
-
-                    call commute_array(strainxxr, htlen, dim=1)
-                    call commute_array(strainyyr, htlen, dim=1)
-                    call commute_array(strainzzr, htlen, dim=1)
-                    call commute_array(strainyzr, htlen, dim=1)
-                    call commute_array(strainxzr, htlen, dim=1)
-                    call commute_array(strainxyr, htlen, dim=1)
-
-                    strainxx_hilbert = compute_hilbert_transform(strainxx, dim=1)
-                    strainyy_hilbert = compute_hilbert_transform(strainyy, dim=1)
-                    strainzz_hilbert = compute_hilbert_transform(strainzz, dim=1)
-                    strainyz_hilbert = compute_hilbert_transform(strainyz, dim=1)
-                    strainxz_hilbert = compute_hilbert_transform(strainxz, dim=1)
-                    strainxy_hilbert = compute_hilbert_transform(strainxy, dim=1)
-
-                    strainxxr_hilbert = compute_hilbert_transform(strainxxr, dim=1)
-                    strainyyr_hilbert = compute_hilbert_transform(strainyyr, dim=1)
-                    strainzzr_hilbert = compute_hilbert_transform(strainzzr, dim=1)
-                    strainyzr_hilbert = compute_hilbert_transform(strainyzr, dim=1)
-                    strainxzr_hilbert = compute_hilbert_transform(strainxzr, dim=1)
-                    strainxyr_hilbert = compute_hilbert_transform(strainxyr, dim=1)
-
-                    grad_c11(interior_region) = grad_c11(interior_region) &
-                        - compute_directional_gradient(strainxx, strainxxr, strainxx_hilbert, strainxxr_hilbert, sgnh, dim=1)
-                    grad_c12(interior_region) = grad_c12(interior_region) &
-                        - compute_directional_gradient(strainxx, strainyyr, strainxx_hilbert, strainyyr_hilbert, sgnh, dim=1) &
-                        - compute_directional_gradient(strainyy, strainxxr, strainyy_hilbert, strainxxr_hilbert, sgnh, dim=1)
-                    grad_c13(interior_region) = grad_c13(interior_region) &
-                        - compute_directional_gradient(strainxx, strainzzr, strainxx_hilbert, strainzzr_hilbert, sgnh, dim=1) &
-                        - compute_directional_gradient(strainzz, strainxxr, strainzz_hilbert, strainxxr_hilbert, sgnh, dim=1)
-                    grad_c22(interior_region) = grad_c22(interior_region) &
-                        - compute_directional_gradient(strainyy, strainyyr, strainyy_hilbert, strainyyr_hilbert, sgnh, dim=1)
-                    grad_c23(interior_region) = grad_c23(interior_region) &
-                        - compute_directional_gradient(strainyy, strainzzr, strainyy_hilbert, strainzzr_hilbert, sgnh, dim=1) &
-                        - compute_directional_gradient(strainzz, strainyyr, strainzz_hilbert, strainyyr_hilbert, sgnh, dim=1)
-                    grad_c33(interior_region) = grad_c33(interior_region) &
-                        - compute_directional_gradient(strainzz, strainzzr, strainzz_hilbert, strainzzr_hilbert, sgnh, dim=1)
-                    grad_c44(interior_region) = grad_c44(interior_region) &
-                        - compute_directional_gradient(strainyz, strainyzr, strainyz_hilbert, strainyzr_hilbert, sgnh, dim=1)
-                    grad_c55(interior_region) = grad_c55(interior_region) &
-                        - compute_directional_gradient(strainxz, strainxzr, strainxz_hilbert, strainxzr_hilbert, sgnh, dim=1)
-                    grad_c66(interior_region) = grad_c66(interior_region) &
-                        - compute_directional_gradient(strainxy, strainxyr, strainxy_hilbert, strainxyr_hilbert, sgnh, dim=1)
-
-                end if
-
-                ! Along y
-                if (index(kernel_v, 'lowy') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_v, 'highy') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    call commute_array(strainxx, htlen, dim=2)
-                    call commute_array(strainyy, htlen, dim=2)
-                    call commute_array(strainzz, htlen, dim=2)
-                    call commute_array(strainyz, htlen, dim=2)
-                    call commute_array(strainxz, htlen, dim=2)
-                    call commute_array(strainxy, htlen, dim=2)
-
-                    call commute_array(strainxxr, htlen, dim=2)
-                    call commute_array(strainyyr, htlen, dim=2)
-                    call commute_array(strainzzr, htlen, dim=2)
-                    call commute_array(strainyzr, htlen, dim=2)
-                    call commute_array(strainxzr, htlen, dim=2)
-                    call commute_array(strainxyr, htlen, dim=2)
-
-                    strainxx_hilbert = compute_hilbert_transform(strainxx, dim=2)
-                    strainyy_hilbert = compute_hilbert_transform(strainyy, dim=2)
-                    strainzz_hilbert = compute_hilbert_transform(strainzz, dim=2)
-                    strainyz_hilbert = compute_hilbert_transform(strainyz, dim=2)
-                    strainxz_hilbert = compute_hilbert_transform(strainxz, dim=2)
-                    strainxy_hilbert = compute_hilbert_transform(strainxy, dim=2)
-
-                    strainxxr_hilbert = compute_hilbert_transform(strainxxr, dim=2)
-                    strainyyr_hilbert = compute_hilbert_transform(strainyyr, dim=2)
-                    strainzzr_hilbert = compute_hilbert_transform(strainzzr, dim=2)
-                    strainyzr_hilbert = compute_hilbert_transform(strainyzr, dim=2)
-                    strainxzr_hilbert = compute_hilbert_transform(strainxzr, dim=2)
-                    strainxyr_hilbert = compute_hilbert_transform(strainxyr, dim=2)
-
-                    grad_c11(interior_region) = grad_c11(interior_region) &
-                        - compute_directional_gradient(strainxx, strainxxr, strainxx_hilbert, strainxxr_hilbert, sgnh, dim=2)
-                    grad_c12(interior_region) = grad_c12(interior_region) &
-                        - compute_directional_gradient(strainxx, strainyyr, strainxx_hilbert, strainyyr_hilbert, sgnh, dim=2) &
-                        - compute_directional_gradient(strainyy, strainxxr, strainyy_hilbert, strainxxr_hilbert, sgnh, dim=2)
-                    grad_c13(interior_region) = grad_c13(interior_region) &
-                        - compute_directional_gradient(strainxx, strainzzr, strainxx_hilbert, strainzzr_hilbert, sgnh, dim=2) &
-                        - compute_directional_gradient(strainzz, strainxxr, strainzz_hilbert, strainxxr_hilbert, sgnh, dim=2)
-                    grad_c22(interior_region) = grad_c22(interior_region) &
-                        - compute_directional_gradient(strainyy, strainyyr, strainyy_hilbert, strainyyr_hilbert, sgnh, dim=2)
-                    grad_c23(interior_region) = grad_c23(interior_region) &
-                        - compute_directional_gradient(strainyy, strainzzr, strainyy_hilbert, strainzzr_hilbert, sgnh, dim=2) &
-                        - compute_directional_gradient(strainzz, strainyyr, strainzz_hilbert, strainyyr_hilbert, sgnh, dim=2)
-                    grad_c33(interior_region) = grad_c33(interior_region) &
-                        - compute_directional_gradient(strainzz, strainzzr, strainzz_hilbert, strainzzr_hilbert, sgnh, dim=2)
-                    grad_c44(interior_region) = grad_c44(interior_region) &
-                        - compute_directional_gradient(strainyz, strainyzr, strainyz_hilbert, strainyzr_hilbert, sgnh, dim=2)
-                    grad_c55(interior_region) = grad_c55(interior_region) &
-                        - compute_directional_gradient(strainxz, strainxzr, strainxz_hilbert, strainxzr_hilbert, sgnh, dim=2)
-                    grad_c66(interior_region) = grad_c66(interior_region) &
-                        - compute_directional_gradient(strainxy, strainxyr, strainxy_hilbert, strainxyr_hilbert, sgnh, dim=2)
-
-                end if
-
-                ! Along y
-                if (index(kernel_v, 'lowz') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_v, 'highz') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    call commute_array(strainxx, htlen, dim=3)
-                    call commute_array(strainyy, htlen, dim=3)
-                    call commute_array(strainzz, htlen, dim=3)
-                    call commute_array(strainyz, htlen, dim=3)
-                    call commute_array(strainxz, htlen, dim=3)
-                    call commute_array(strainxy, htlen, dim=3)
-
-                    call commute_array(strainxxr, htlen, dim=3)
-                    call commute_array(strainyyr, htlen, dim=3)
-                    call commute_array(strainzzr, htlen, dim=3)
-                    call commute_array(strainyzr, htlen, dim=3)
-                    call commute_array(strainxzr, htlen, dim=3)
-                    call commute_array(strainxyr, htlen, dim=3)
-
-                    strainxx_hilbert = compute_hilbert_transform(strainxx, dim=3)
-                    strainyy_hilbert = compute_hilbert_transform(strainyy, dim=3)
-                    strainzz_hilbert = compute_hilbert_transform(strainzz, dim=3)
-                    strainyz_hilbert = compute_hilbert_transform(strainyz, dim=3)
-                    strainxz_hilbert = compute_hilbert_transform(strainxz, dim=3)
-                    strainxy_hilbert = compute_hilbert_transform(strainxy, dim=3)
-
-                    strainxxr_hilbert = compute_hilbert_transform(strainxxr, dim=3)
-                    strainyyr_hilbert = compute_hilbert_transform(strainyyr, dim=3)
-                    strainzzr_hilbert = compute_hilbert_transform(strainzzr, dim=3)
-                    strainyzr_hilbert = compute_hilbert_transform(strainyzr, dim=3)
-                    strainxzr_hilbert = compute_hilbert_transform(strainxzr, dim=3)
-                    strainxyr_hilbert = compute_hilbert_transform(strainxyr, dim=3)
-
-                    grad_c11(interior_region) = grad_c11(interior_region) &
-                        - compute_directional_gradient(strainxx, strainxxr, strainxx_hilbert, strainxxr_hilbert, sgnh, dim=3)
-                    grad_c12(interior_region) = grad_c12(interior_region) &
-                        - compute_directional_gradient(strainxx, strainyyr, strainxx_hilbert, strainyyr_hilbert, sgnh, dim=3) &
-                        - compute_directional_gradient(strainyy, strainxxr, strainyy_hilbert, strainxxr_hilbert, sgnh, dim=3)
-                    grad_c13(interior_region) = grad_c13(interior_region) &
-                        - compute_directional_gradient(strainxx, strainzzr, strainxx_hilbert, strainzzr_hilbert, sgnh, dim=3) &
-                        - compute_directional_gradient(strainzz, strainxxr, strainzz_hilbert, strainxxr_hilbert, sgnh, dim=3)
-                    grad_c22(interior_region) = grad_c22(interior_region) &
-                        - compute_directional_gradient(strainyy, strainyyr, strainyy_hilbert, strainyyr_hilbert, sgnh, dim=3)
-                    grad_c23(interior_region) = grad_c23(interior_region) &
-                        - compute_directional_gradient(strainyy, strainzzr, strainyy_hilbert, strainzzr_hilbert, sgnh, dim=3) &
-                        - compute_directional_gradient(strainzz, strainyyr, strainzz_hilbert, strainyyr_hilbert, sgnh, dim=3)
-                    grad_c33(interior_region) = grad_c33(interior_region) &
-                        - compute_directional_gradient(strainzz, strainzzr, strainzz_hilbert, strainzzr_hilbert, sgnh, dim=3)
-                    grad_c44(interior_region) = grad_c44(interior_region) &
-                        - compute_directional_gradient(strainyz, strainyzr, strainyz_hilbert, strainyzr_hilbert, sgnh, dim=3)
-                    grad_c55(interior_region) = grad_c55(interior_region) &
-                        - compute_directional_gradient(strainxz, strainxzr, strainxz_hilbert, strainxzr_hilbert, sgnh, dim=3)
-                    grad_c66(interior_region) = grad_c66(interior_region) &
-                        - compute_directional_gradient(strainxy, strainxyr, strainxy_hilbert, strainxyr_hilbert, sgnh, dim=3)
-                end if
-
-            end if
-
-            if (yn_energy_precond) then
-
-                !$omp parallel do private(i, j, k) collapse(3) schedule(auto)
-                do k = nz1_interior, nz2_interior
-                    do j = ny1_interior, ny2_interior
-                        do i = nx1_interior, nx2_interior
-                            energy_src_v(i, j, k) = energy_src_v(i, j, k) &
-                                + strainxx(i, j, k)**2 + strainyy(i, j, k)**2 + strainzz(i, j, k)**2 &
-                                + 2*strainyz(i, j, k)**2 + 2*strainxz(i, j, k)**2 + 2*strainxy(i, j, k)**2
-                            energy_rec_v(i, j, k) = energy_rec_v(i, j, k) &
-                                + strainxxr(i, j, k)**2 + strainyyr(i, j, k)**2 + strainzzr(i, j, k)**2 &
-                                + 2*strainyzr(i, j, k)**2 + 2*strainxzr(i, j, k)**2 + 2*strainxyr(i, j, k)**2
-                        end do
-                    end do
-                end do
-                !$omp end parallel do
-
-            end if
-
-        end if
-
-        if (kernel_a /= '') then
+        if (yn_energy_precond) then
 
             !$omp parallel do private(i, j, k) collapse(3) schedule(auto)
-            do k = nz1, nz2
-                do j = ny1, ny2
-                    do i = nx1, nx2
-                        src_vx(i, j, k) = sum(vx(i:i + 1, j, k)) - sum(prev_vx(i:i + 1, j, k))
-                        rec_vx(i, j, k) = sum(vxr(i:i + 1, j, k))
-                        src_vy(i, j, k) = sum(vy(i, j:j + 1, k)) - sum(prev_vy(i, j:j + 1, k))
-                        rec_vy(i, j, k) = sum(vyr(i, j:j + 1, k))
-                        src_vz(i, j, k) = sum(vz(i, j, k:k + 1)) - sum(prev_vz(i, j, k:k + 1))
-                        rec_vz(i, j, k) = sum(vzr(i, j, k:k + 1))
+            do k = nz1_interior, nz2_interior
+                do j = ny1_interior, ny2_interior
+                    do i = nx1_interior, nx2_interior
+                        energy_src_v(i, j, k) = energy_src_v(i, j, k) &
+                            + strainxx(i, j, k)**2 + strainyy(i, j, k)**2 + strainzz(i, j, k)**2 &
+                            + 2*strainyz(i, j, k)**2 + 2*strainxz(i, j, k)**2 + 2*strainxy(i, j, k)**2
+                        energy_rec_v(i, j, k) = energy_rec_v(i, j, k) &
+                            + strainxxr(i, j, k)**2 + strainyyr(i, j, k)**2 + strainzzr(i, j, k)**2 &
+                            + 2*strainyzr(i, j, k)**2 + 2*strainxzr(i, j, k)**2 + 2*strainxyr(i, j, k)**2
                     end do
                 end do
             end do
             !$omp end parallel do
 
-            if (kernel_a == 'full') then
+        end if
 
-                !$omp parallel do private(i, j, k) collapse(3) schedule(auto)
-                do k = nz1_interior, nz2_interior
-                    do j = ny1_interior, ny2_interior
-                        do i = nx1_interior, nx2_interior
-                            grad_rho(i, j, k) = grad_rho(i, j, k) + src_vx(i, j, k)*rec_vx(i, j, k) &
-                                + src_vy(i, j, k)*rec_vy(i, j, k) + src_vz(i, j, k)*rec_vz(i, j, k)
-                        end do
+        !$omp parallel do private(i, j, k) collapse(3) schedule(auto)
+        do k = nz1, nz2
+            do j = ny1, ny2
+                do i = nx1, nx2
+                    src_vx(i, j, k) = sum(vx(i:i + 1, j, k)) - sum(prev_vx(i:i + 1, j, k))
+                    rec_vx(i, j, k) = sum(vxr(i:i + 1, j, k))
+                    src_vy(i, j, k) = sum(vy(i, j:j + 1, k)) - sum(prev_vy(i, j:j + 1, k))
+                    rec_vy(i, j, k) = sum(vyr(i, j:j + 1, k))
+                    src_vz(i, j, k) = sum(vz(i, j, k:k + 1)) - sum(prev_vz(i, j, k:k + 1))
+                    rec_vz(i, j, k) = sum(vzr(i, j, k:k + 1))
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+        !$omp parallel do private(i, j, k) collapse(3) schedule(auto)
+        do k = nz1_interior, nz2_interior
+            do j = ny1_interior, ny2_interior
+                do i = nx1_interior, nx2_interior
+                    grad_rho(i, j, k) = grad_rho(i, j, k) + src_vx(i, j, k)*rec_vx(i, j, k) &
+                        + src_vy(i, j, k)*rec_vy(i, j, k) + src_vz(i, j, k)*rec_vz(i, j, k)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+        if (yn_energy_precond) then
+
+            !$omp parallel do private(i, j, k) collapse(3) schedule(auto)
+            do k = nz1_interior, nz2_interior
+                do j = ny1_interior, ny2_interior
+                    do i = nx1_interior, nx2_interior
+                        energy_src_a(i, j, k) = energy_src_a(i, j, k) + src_vx(i, j, k)**2 + src_vy(i, j, k)**2 + src_vz(i, j, k)**2
+                        energy_rec_a(i, j, k) = energy_rec_a(i, j, k) + rec_vx(i, j, k)**2 + rec_vy(i, j, k)**2 + rec_vz(i, j, k)**2
                     end do
                 end do
-                !$omp end parallel do
-
-            else
-
-                ! Along x
-                if (index(kernel_a, 'lowx') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_a, 'highx') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    call commute_array(src_vx, htlen, dim=1)
-                    call commute_array(rec_vx, htlen, dim=1)
-                    src_hilbert = compute_hilbert_transform(src_vx, dim=1)
-                    rec_hilbert = compute_hilbert_transform(rec_vx, dim=1)
-                    grad_rho(interior_region) = grad_rho(interior_region) &
-                        + compute_directional_gradient(src_vx, rec_vx, src_hilbert, rec_hilbert, sgnh, dim=1)
-
-                    call commute_array(src_vy, htlen, dim=1)
-                    call commute_array(rec_vy, htlen, dim=1)
-                    src_hilbert = compute_hilbert_transform(src_vy, dim=1)
-                    rec_hilbert = compute_hilbert_transform(rec_vy, dim=1)
-                    grad_rho(interior_region) = grad_rho(interior_region) &
-                        + compute_directional_gradient(src_vy, rec_vy, src_hilbert, rec_hilbert, sgnh, dim=1)
-
-                    call commute_array(src_vz, htlen, dim=1)
-                    call commute_array(rec_vz, htlen, dim=1)
-                    src_hilbert = compute_hilbert_transform(src_vz, dim=1)
-                    rec_hilbert = compute_hilbert_transform(rec_vz, dim=1)
-                    grad_rho(interior_region) = grad_rho(interior_region) &
-                        + compute_directional_gradient(src_vz, rec_vz, src_hilbert, rec_hilbert, sgnh, dim=1)
-
-                end if
-
-                ! Along x
-                if (index(kernel_a, 'lowy') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_a, 'highy') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    call commute_array(src_vx, htlen, dim=2)
-                    call commute_array(rec_vx, htlen, dim=2)
-                    src_hilbert = compute_hilbert_transform(src_vx, dim=2)
-                    rec_hilbert = compute_hilbert_transform(rec_vx, dim=2)
-                    grad_rho(interior_region) = grad_rho(interior_region) &
-                        + compute_directional_gradient(src_vx, rec_vx, src_hilbert, rec_hilbert, sgnh, dim=2)
-
-                    call commute_array(src_vy, htlen, dim=2)
-                    call commute_array(rec_vy, htlen, dim=2)
-                    src_hilbert = compute_hilbert_transform(src_vy, dim=2)
-                    rec_hilbert = compute_hilbert_transform(rec_vy, dim=2)
-                    grad_rho(interior_region) = grad_rho(interior_region) &
-                        + compute_directional_gradient(src_vy, rec_vy, src_hilbert, rec_hilbert, sgnh, dim=2)
-
-                    call commute_array(src_vz, htlen, dim=2)
-                    call commute_array(rec_vz, htlen, dim=2)
-                    src_hilbert = compute_hilbert_transform(src_vz, dim=2)
-                    rec_hilbert = compute_hilbert_transform(rec_vz, dim=2)
-                    grad_rho(interior_region) = grad_rho(interior_region) &
-                        + compute_directional_gradient(src_vz, rec_vz, src_hilbert, rec_hilbert, sgnh, dim=2)
-
-                end if
-
-                ! Along x
-                if (index(kernel_a, 'lowz') /= 0) then
-                    sgnh = 1
-                else if (index(kernel_a, 'highz') /= 0) then
-                    sgnh = -1
-                else
-                    sgnh = 0
-                end if
-
-                if (sgnh /= 0) then
-
-                    call commute_array(src_vx, htlen, dim=3)
-                    call commute_array(rec_vx, htlen, dim=3)
-                    src_hilbert = compute_hilbert_transform(src_vx, dim=3)
-                    rec_hilbert = compute_hilbert_transform(rec_vx, dim=3)
-                    grad_rho(interior_region) = grad_rho(interior_region) &
-                        + compute_directional_gradient(src_vx, rec_vx, src_hilbert, rec_hilbert, sgnh, dim=3)
-
-                    call commute_array(src_vy, htlen, dim=3)
-                    call commute_array(rec_vy, htlen, dim=3)
-                    src_hilbert = compute_hilbert_transform(src_vy, dim=3)
-                    rec_hilbert = compute_hilbert_transform(rec_vy, dim=3)
-                    grad_rho(interior_region) = grad_rho(interior_region) &
-                        + compute_directional_gradient(src_vy, rec_vy, src_hilbert, rec_hilbert, sgnh, dim=3)
-
-                    call commute_array(src_vz, htlen, dim=3)
-                    call commute_array(rec_vz, htlen, dim=3)
-                    src_hilbert = compute_hilbert_transform(src_vz, dim=3)
-                    rec_hilbert = compute_hilbert_transform(rec_vz, dim=3)
-                    grad_rho(interior_region) = grad_rho(interior_region) &
-                        + compute_directional_gradient(src_vz, rec_vz, src_hilbert, rec_hilbert, sgnh, dim=3)
-
-                end if
-
-            end if
-
-            if (yn_energy_precond) then
-
-                !$omp parallel do private(i, j, k) collapse(3) schedule(auto)
-                do k = nz1_interior, nz2_interior
-                    do j = ny1_interior, ny2_interior
-                        do i = nx1_interior, nx2_interior
-                            energy_src_a(i, j, k) = energy_src_a(i, j, k) + src_vx(i, j, k)**2 + src_vy(i, j, k)**2 + src_vz(i, j, k)**2
-                            energy_rec_a(i, j, k) = energy_rec_a(i, j, k) + rec_vx(i, j, k)**2 + rec_vy(i, j, k)**2 + rec_vz(i, j, k)**2
-                        end do
-                    end do
-                end do
-                !$omp end parallel do
-
-            end if
+            end do
+            !$omp end parallel do
 
         end if
 
     end subroutine
-
-#include '../../lib/inc_directional_gradient.f90'
 
     !
     !> Compute source parameter gradients

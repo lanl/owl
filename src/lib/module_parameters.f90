@@ -296,9 +296,6 @@ module mod_parameters
     character(len=32), allocatable, dimension(:) :: search_direction_processing
     character(len=32), allocatable, dimension(:) :: process_shot_grad, process_grad
 
-    character(len=128) :: kernel_v, kernel_a, prev_kernel_v, prev_kernel_a
-    logical :: kernel_type_changed = .false.
-
     integer :: resume_from_iter
     logical :: yn_flat_stop = .false.
     logical :: yn_continue_inv = .false.
@@ -308,14 +305,6 @@ module mod_parameters
     ! Some data may have extremely unbalanced trace amplitudes
     ! In this case, it may be good to discard small-amplitude traces
     real :: trace_discard_threshold = 1.0e-6
-
-    ! In the Adam optimizer, β_1 and β_2 are exponential decay rates for computing
-    ! the moving averages of the gradient and the squared gradient, respectively.
-    real :: adam_beta1 = 0.9
-    real :: adam_beta2 = 0.999
-    real :: adam_eps = 1.0e-8
-
-    integer :: htlen = 30
 
     logical :: yn_update_medium = .true.
     logical :: yn_update_source = .false.
@@ -583,10 +572,6 @@ contains
 
         !=======================================================================
         call readpar_string(file_parameter, 'search_method', search_method, 'cg')
-
-        call readpar_float(file_parameter, 'adam_beta1', adam_beta1, 0.9)
-        call readpar_float(file_parameter, 'adam_beta2', adam_beta2, 0.999)
-        call readpar_float(file_parameter, 'adam_eps', adam_eps, 1.0e-8)
 
         call readpar_string(file_parameter, 'step_size_method', step_size_method, 'linear')
 

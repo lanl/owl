@@ -49,8 +49,6 @@ module acoustic_iso_3d
         type(source_receiver_geometry) :: gmtr
         logical :: energy_precond = .false.
         logical :: reconstruct = .false.
-        character(len=24) :: kernel_v = 'full'
-        character(len=24) :: kernel_a = 'full'
         type(su) :: seis_p, seis_pr
 
     contains
