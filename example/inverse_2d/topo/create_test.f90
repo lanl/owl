@@ -4,16 +4,21 @@ program test
     use libflit
     use librgm
 
+    implicit none
+
     type(rgm2_curved) :: p
     real, allocatable, dimension(:) :: tp
     type(fractal_noise_1d) :: xx
     real, allocatable, dimension(:, :) :: vp, vs, rho, m
     real :: minvp, minvs, minrho
-    integer :: n1, n2
+    integer :: n1, n2, i, j, ishot
+
     real :: f0 = 7.5
     real :: sz = 0.0
     real :: rz = 0.0
     integer :: pml = 15
+
+    call make_directory('./model')
 
     n1 = 101
     n2 = 301
@@ -30,7 +35,7 @@ program test
     tp = gauss_filt(tp, 1.0)
     tp = rescale(tp, [0.0, 300.0])
 
-    open (3, file='ftopo.txt')
+    open (3, file='./model/ftopo.txt')
     do i = -pml, n2 + pml + 1
         write (3, *) (i - 1)*10.0, tp(i)
     end do
@@ -73,8 +78,6 @@ program test
     vs = 1.0/gauss_filt(1.0/p%vs, [6.0, 20.0])
     rho = p%rho
 
-    call make_directory('./model')
-
     minvp = minval(p%vp, mask=(m ==1))
     minvs = minval(p%vs, mask=(m ==1))
     minrho = minval(p%rho, mask=(m ==1))
@@ -114,7 +117,6 @@ program test
         write (3, *) 1
         write (3, *) 20.0 + (ishot - 1)*50.0, 0.0, sz
         write (3, *) 'explosion'
-        !        write(3, *) 'force', atan(3.0/25.0)*const_rad2deg, 0.0
         write (3, *) 'ricker', f0, 1e6, 0.0
         write (3, *) 0, 0
 
@@ -128,4 +130,4 @@ program test
         close (3)
     end do
 
-end program test
+end program

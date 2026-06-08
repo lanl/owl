@@ -3,11 +3,15 @@ program test
 
     use libflit
 
+    implicit none
+
     real, allocatable, dimension(:, :) :: w, ww, vp, vs
-    integer :: nsf
+    integer :: nsf, i, j
+
+    call make_directory('./model')
 
     w = zeros(221, 801)
-    call input_array(w, './model/marmousi_vp.bin')
+    call input_array(w, './marmousi_vp.bin')
 
     w = interp_to(w, [111, 401])
 
@@ -15,22 +19,8 @@ program test
 
     vp = w
     vs = rescale(vp, [680.0, 2700.0])
-
-    eps = rescale(median_filt(1.0/vp), [0.2, 0.3])
-    del = rescale(median_filt(1.0/vs), [0.1, 0.15])
-
-    the = zeros_like(vp)
-    the = gauss_filt(deriv(vp, dim=1), [1.0, 1.0])
-    call gstdip(the, the)
-    the = gauss_filt(median_filt(the, [4, 4]), [2.0, 2.0])
-
-
     call output_array(vp, './model/vp.bin')
     call output_array(vs, './model/vs.bin')
-
-    call output_array(eps, './model/eps.bin')
-    call output_array(del, './model/del.bin')
-    call output_array(the, './model/the.bin')
 
     ww = vp
     vp = 1.0/gauss_filt(1.0/vp, [8.0, 8.0])
@@ -61,7 +51,6 @@ program test
         write(33, *)
         write(33, *) 1
         write(33, *) (i - 1)*100.0 + 50.0, 0.0, 20.0
-        !        write(33, *) 'force', 0.0, 0.0
         write(33, *) 'explosion'
         write(33, *) 'ricker', 5.0, 100.0, 0.0
         write(33, *) 0, 0
@@ -75,6 +64,6 @@ program test
     end do
     close(3)
 
-end program test
+end program
 
 

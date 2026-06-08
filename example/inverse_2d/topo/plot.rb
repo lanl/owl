@@ -1,12 +1,10 @@
 
 
-# elevation
-
+# Elevation
 system "x_showgraph -in=ftopo.txt -ftype=ascii -ptype=2 -size1=6 -size2=2 -label1='Horizontal Distance (m)' -label2='Elevation (m)' -x1beg=0 -x1end=3000 -x2beg=-10 -x2end=310 -tick2beg=0 -linewidth=2 -tick1d=500 -mtick1=4 -tick2d=50 -mtick2=4 -out=plot/elevation.pdf -grid2=y  &"
 
 
-
-# result
+# Inversion results
 
 opts = "-n1=101 -label1='Depth (km)' -size1=2 -size2=6 -label2='Horizontal Position (km)' -d1=0.01 -d2=0.01 -tick1d=0.25 -mtick1=4 -tick2d=0.5 -mtick2=4 -mask=model/mask.bin -lloc=bottom -lmtick=9 -legend=y -color=rainbowcmyk "
 
@@ -35,9 +33,7 @@ system "x_showmatrix -in=test_dtw_vector/iteration_50/model/updated_vp.bin #{opt
 system "x_showmatrix -in=test_dtw_vector/iteration_50/model/updated_vs.bin #{opts} -out=./plot/vs_dtw.pdf #{scolor}&"
 
 
-
-
-# adjoint source of awi for illustration
+# Adjoint source of awi for illustration
 
 dataopts = " -n1=2501 -size1=5 -size2=5 -lloc=bottom -lmtick=9 -legend=y -n1=2501 -d1=1.0e-3 -label1='Time (s)' -label2='Trace Number' -color=binary -tick2d=50 -mtick2=4 -tick1d=0.5 -mtick1=4 -lwidth=4.5 -unit='Adjoint Source Amplitude' "
 
@@ -55,8 +51,7 @@ system "x_suhdrstrip <test_waveform/iteration_50/adjoint_source/shot_4_seismogra
 system "x_showmatrix -in=ad3.bin -out=./plot/adjsrc_l2.pdf #{dataopts} -unit='Adjoint Source Amplitude ($\\times 10^7$)' -cscale=1.0e7 -clip=1 & "
 
 
-
-# waveform comparison
+# Waveform comparison
 
 wiggleopts = " -wigglecolor=b,r -every=6 -size1=5 -size2=5 -label1='Time (s)' -label2='Trace Number' -clip=0.5e-6 -plotlabel='Observed':'Synthetic' "
 

@@ -48,7 +48,7 @@ program test
     call output_array(p%vp, './model/vp.bin')
     call output_array(p%rho, './model/rho.bin')
 
-    ! Optionally, these models can be saved to h5 files
+    ! Optionally, these models can be saved to hdf5
     call fh5_open('./model/model.h5', fh5_fid, mode='w')
     call fh5_write_attr(fh5_fid, '/', 'nx', n2)
     call fh5_write_attr(fh5_fid, '/', 'nz', n1)

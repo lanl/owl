@@ -126,7 +126,7 @@ The custom stf file must be in the following format:
 	tn ampn
 ```
 
-that is, each row contains `time amplitude` of the stf, where the time is in second. For example:
+That is, each row contains `time amplitude` of the stf, where the time is in second. For example:
 
 ```ruby
 	0.0			0.0
@@ -141,13 +141,143 @@ The `time` can be irregularly sampled, although in practice they are usually reg
 
 For FWI applications, due to historical limitations of SU header, here we don't use SU to store source-receiver geometry infomration. Therefore, in the provided observed data, the SU files can have null headers (except time-related headers like sampling interval and number of samples), but the number of receivers must be consistent with that in the geometry file. Future versions of `OWL` may seek using other more flexible data format for I/O.  
 
-## Model
+With the above context, one can use the following parameters to specify the geometry for modeling, FWI, or MT inversion in `OWL`:
 
+> **`ns`** 
+- **Type**: integer
+- **Description**: Number of shots in the test/survey. 
+- **Default**: `1`
+- **Required**: `No`
+
+> **`file_geometry`** 
+- **Type**: string
+- **Description**: Path to the source-receiver geometry file, e.g., `file_geometry = ./geometry/geometry.txt`. 
+- **Default**: `None`
+- **Required**: `Yes`
+
+`OWL` has several parameters that can be used to select shots, receivers, spatial range of sources/receivers, and so on: 
+
+> **`sxmin`** 
+- **Type**: float
+- **Description**: Min value in x for selecting sources. 
+- **Default**: `-float_huge` (all sources are qualified)
+- **Required**: `No`
+
+> **`sxmax`** 
+- **Type**: float
+- **Description**: Max value in x for selecting sources. 
+- **Default**: `float_huge` (all sources are qualified)
+- **Required**: `No`
 
 ## Dimension
 
-## Other parameters
+`OWL` currently only supports (1) regularly sampeld grids, or (2) curvilinear grids for elastic-wave modeling, FWI, or MT inversion. The input models can be specified with the following parameters:
 
-<!-- > **`n1` (integer)** 
-- **Description**: Number of grid points along axis-1 of the generated random model.
-- **Default**: `128` -->
+> **`nx`** 
+- **Type**: integer
+- **Description**: Number of grid points along x-axis. 
+- **Default**: `None`
+- **Required**: `Yes`
+
+> **`ny`** 
+- **Type**: integer
+- **Description**: Number of grid points along y-axis. 
+- **Default**: `None`
+- **Required**: `No` (2D); `Yes` (3D)
+
+> **`nz`** 
+- **Type**: integer
+- **Description**: Number of grid points along z-axis. 
+- **Default**: `None`
+- **Required**: `Yes`
+
+> **`dx`** 
+- **Type**: float
+- **Description**: Grid size along x-axis. 
+- **Default**: `None`
+- **Required**: `Yes`
+
+> **`dy`** 
+- **Type**: float
+- **Description**: Grid size along y-axis. 
+- **Default**: `None`
+- **Required**: `No` (2D); `Yes` (3D)
+
+> **`dz`** 
+- **Type**: float
+- **Description**: Grid size along z-axis. 
+- **Default**: `None`
+- **Required**: `Yes`
+
+`OWL` supports resampling of the input models from `(nx, ny, nz)` to `(nnx, nny, nnz)`; correspondingly, the grid size can be resampled from `(dx, dy, dz)` to `(ddx, ddy, ddz)`. This is done internally using linear interpolation. For modeling, the outputs (e.g., wavefield snapshots) will have a size of `(nnx, nny, nnz)`; for FWI, the outputs (e.g., updated medium parameter models) will have a size of `(nnx, nny, nnz)`. The resampling needs the following parameters:
+
+> **`nnx`** 
+- **Type**: integer
+- **Description**: Number of grid points along x-axis after resampling. 
+- **Default**: `nx`
+- **Required**: `No`
+
+> **`nny`** 
+- **Type**: integer
+- **Description**: Number of grid points along y-axis after resampling. 
+- **Default**: `ny`
+- **Required**: `No`
+
+> **`nnz`** 
+- **Type**: integer
+- **Description**: Number of grid points along z-axis after resampling. 
+- **Default**: `nz`
+- **Required**: `No`
+
+> **`ddx`** 
+- **Type**: float
+- **Description**: Grid size along x-axis after resampling. 
+- **Default**: `dx`
+- **Required**: `No`
+
+> **`ddy`** 
+- **Type**: float
+- **Description**: Grid size along y-axis after resampling. 
+- **Default**: `dy`
+- **Required**: `No`
+
+> **`ddz`** 
+- **Type**: float
+- **Description**: Grid size along z-axis after resampling. 
+- **Default**: `dz`
+- **Required**: `No`
+
+## Model
+
+> **`which_medium`** 
+- **Type**: string
+- **Description**: Type of medium; current version supports
+	- `acoustic-iso`: isotropic acoustic medium, parameterized by P-wave velocity $V_p$ (`vp`) and mass density $\rho$ (`rho`);
+	- `elastic-iso`: isotropic elastic medium, parameterized by P-wave velocity $V_p$ (`vp`), S-wave velocity $V_s$ (`vs`), and mass density $\rho$ (`rho`);
+	- `elastic-vhtiort`: anisotropic elastic medium with anisotropy up to VTI (transverse isotropy with a vertical symmetry axis), HTI (transverse isotropy with a horizontal symmetry axis), and ORT (orthrohombic anisotropy caused by two or three sets of fractures oriented along x-, y-, and z-axes); 
+	-`elastic-tti`: general anisotropic medium, which can describe arbitrary anisotropy, such as TTI (transverse isotropy with an arbitrary tilt symmetry axis), monolithic anisotropy, or ORT with an arbitrary rotation axis. 
+- **Default**: `acoustic-iso`
+- **Required**: `No`
+
+Use of `which_medium` should be closely coupled with the following parameters, especially in the anisotropic case: 
+
+> **`anisotropy_type`** 
+- **Type**: string
+- **Description**: Type of anisotropy parameterization.  
+- **Default**: `iso`
+- **Required**: `No`
+
+## Free surface and topography
+
+For elastic modeling, FWI, and MT inversion, `OWL` can use free surface (only for top surface) boundary condition. The free surface can be topographic with the topography specified by an external file. 
+
+> **`yn_free_surface`** 
+- **Type**: logical
+- **Description**: Use free surface. 
+- **Default**: `n` (not free surface)
+- **Required**: `No`
+
+
+## Inversion
+
+## Other parameters

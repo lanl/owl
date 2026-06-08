@@ -1,0 +1,9 @@
+
+misfit_type = dtw
+adj_nt = 501
+tlag_max = 0.3
+dtw_form = phase
+dtw_rinst = 0.1
+dtw_rcuml = 1.0
+
+
