@@ -413,10 +413,6 @@ Available data-processing steps are:
 | `dp_rotate_y` | float | y-axis rotation angle in degrees for the `rotate` processing step | `0.0` | no |
 | `dp_rotate_z` | float | z-axis rotation angle in degrees for the `rotate` processing step | `0.0` | no |
 
-
----
-
-
 ### Free surface and topography
 
 For elastic modeling, FWI, and MT inversion, `OWL` can use a free-surface boundary condition for the top surface. The free surface can be topographic, with the topography specified by an external file. 
