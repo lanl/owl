@@ -1,5 +1,6 @@
 # Description
 **OWL: Open Wave Library for seismic wave modeling and full-waveform inversion** 
+
 [![DOI](https://zenodo.org/badge/1009207523.svg)](https://doi.org/10.5281/zenodo.20668967)
 
 `OWL` is an open-source package for seismic wave simulation and full-waveform inversion (FWI) in the following types of media: 
