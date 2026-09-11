@@ -161,7 +161,9 @@ def run():
 
     # Error-vs-offset bar chart
     fig2, ax2 = plt.subplots(figsize=(7, 4))
-    ax2.bar(OFFSETS, [e * 100 for e in errs], color=['green' if e < 0.05 else 'red' for e in errs])
+    # width in metres: the default 0.8 is sub-pixel on a 700 m axis and drops bars
+    ax2.bar(OFFSETS, [e * 100 for e in errs], width=40.0,
+            color=['green' if e < 0.05 else 'red' for e in errs])
     ax2.axhline(5.0, color='red', ls='--', label='5 % threshold')
     ax2.set_xlabel('Offset (m)')
     ax2.set_ylabel('Relative L2 error (%)')

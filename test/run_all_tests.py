@@ -2,7 +2,7 @@
 """
 OWL correctness unit tests – master runner.
 
-Runs all six tests and produces a summary figure.
+Runs all eight tests and produces a summary figure.
 
 Usage:
     cd test/
@@ -35,6 +35,7 @@ TEST_DEFS = [
     ('test_jacobian_linearity','Test 5',  'Jacobian linearity\nw.r.t. model'),
     ('test_jacobian_adjoint',  'Test 6',  'Jacobian adjoint\ntest'),
     ('test_elastic_lamb',      'Test 7',  'Elastic Lamb problem\non a tilted surface'),
+    ('test_elastic_analytic',  'Test 8',  'Elastic analytic\nwholespace response'),
 ]
 
 results = []   # list of (name, short, passed, elapsed, detail)
@@ -79,31 +80,34 @@ print(f'  Overall: {"ALL PASSED" if all_passed else "SOME TESTS FAILED"}')
 print()
 
 # ── Summary figure ─────────────────────────────────────────────────────────────
-fig, ax = plt.subplots(figsize=(10, 4))
-ax.set_xlim(-0.5, len(results) - 0.5)
-ax.set_ylim(-0.5, 1.5)
+# Grid layout: at most NCOL tiles per row, so the figure stays compact instead of
+# growing ever wider as tests are added.
+NCOL = 4
+nrow = (len(results) + NCOL - 1) // NCOL
+
+fig, ax = plt.subplots(figsize=(2.6 * NCOL, 1.75 * nrow))
+ax.set_xlim(-0.5, NCOL - 0.5)
+ax.set_ylim(-0.5, nrow - 0.5)
 ax.axis('off')
 
 for i, (label, short, passed, elapsed, _) in enumerate(results):
+    r, c = divmod(i, NCOL)
+    y = nrow - 1 - r                       # fill from the top row down
     color = '#2ecc71' if passed else '#e74c3c'
-    rect  = mpatches.FancyBboxPatch(
-        (i - 0.4, 0.2), 0.8, 0.8,
-        boxstyle='round,pad=0.05',
+    rect = mpatches.FancyBboxPatch(
+        (c - 0.45, y - 0.40), 0.90, 0.80,
+        boxstyle='round,pad=0.02',
         facecolor=color, edgecolor='white', lw=2
     )
     ax.add_patch(rect)
-    ax.text(i, 0.95, label, ha='center', va='center', fontsize=10,
+    ax.text(c, y + 0.27, label, ha='center', va='center', fontsize=10,
             fontweight='bold', color='white')
-    ax.text(i, 0.60, short, ha='center', va='center', fontsize=7.5,
+    ax.text(c, y + 0.01, short, ha='center', va='center', fontsize=7.5,
             color='white', multialignment='center')
     status_txt = 'PASSED' if passed else 'FAILED'
-    ax.text(i, 0.30, f'{status_txt}\n({elapsed:.0f} s)', ha='center', va='center',
-            fontsize=8, color='white', fontweight='bold')
+    ax.text(c, y - 0.27, f'{status_txt}\n({elapsed:.0f} s)', ha='center',
+            va='center', fontsize=8, color='white', fontweight='bold')
 
-title_color = '#27ae60' if all_passed else '#c0392b'
-fig.suptitle('OWL Correctness Unit Tests – '
-             + ('All Tests Passed ✓' if all_passed else 'Some Tests Failed ✗'),
-             fontsize=13, fontweight='bold', color=title_color, y=1.0)
 plt.tight_layout()
 fig.savefig(os.path.join(PLOT, 'summary.png'), dpi=150, bbox_inches='tight')
 plt.close()
