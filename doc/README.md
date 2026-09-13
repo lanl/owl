@@ -113,10 +113,12 @@ Or a general moment tensor source:
 
 For source time function, the valid options are:
 - `gaussian`
-- `gaussian_deriv` (the first-order derivative of Gaussian)
-- `gaussian_deriv_deriv`, `ricker` (the second-order derivative of Gaussian)
-- `gaussian_deriv_deriv_deriv`, `ricker_deriv` (the third-order derivative of Gaussian)
+- `gaussian_deriv`, `gaussian_deriv1` (the first-order derivative of Gaussian)
+- `gaussian_deriv_deriv`, `gaussian_deriv2`, `ricker` (the second-order derivative of Gaussian)
+- `gaussian_deriv_deriv_deriv`, `gaussian_deriv3`, `ricker_deriv`, `ricker_deriv1` (the third-order derivative of Gaussian)
 - `ormsby` (approximation to sinc with four corner frequencies)
+- `morlet` (Morlet wavelet)
+- `cosine` (cosine wavelet)
 - `custom` (user-provided custom source time function)
 
 To use a custom stf, the user must use the following form:
@@ -256,6 +258,7 @@ The *original* grid describes the files on disk. A *target* grid (see below) can
 | `ox` | float | Origin coordinate in x | `0.0` | no |
 | `oz` | float | Origin coordinate in z | `0.0` | no |
 | `oy` | float | Origin coordinate in y | `0.0` | no |
+| `npml` | integer | Number of ADE-CFS-MPML absorbing layers on each absorbing boundary of the computational domain | `15` | no |
 
 
 #### > Model Grid (target, or resampled)
@@ -307,7 +310,7 @@ Restrict the active model domain to a sub-region. Points outside are ignored.
 | Parameter | Type | Description | Default | Required |
 |-----------|------|-------------|---------|----------|
 | `which_medium` | string | Medium type: `acoustic-iso`, `acoustic-tti`, `elastic-iso`, `elastic-vhtiort`, or `elastic-tti` | `acoustic-iso` | no |
-| `anisotropy_type` | string | Anisotropy parameterization for anisotropic elastic media: `iso` (isotropic), `vhtiort` (VTI, HTI, or orthorhombic anisotropy), `tti` (TTI), or `cij` (general anisotropy) | `iso` | no |
+| `anisotropy_type` | string | Anisotropy parameterization for anisotropic elastic media: `iso` (isotropic), `thomsen` (Thomsen parameters), `a-t` (Alkhalifah-Tsvankin parameters), or `cij` (elastic constants) | `iso` | no |
 | `model_name` | string list | Model parameter files required by forward modeling | — | **yes** for forward modeling |
 | `file_<name>` | string | Binary file for the model/source parameter `<name>`, where `<name>` is any entry in `model_name`, `model_update`, or `model_aux`; examples include `file_vp`, `file_vs`, `file_rho`, `file_c11`, and `file_mt` | `''` | normally **yes** for each supplied forward or auxiliary model |
 
@@ -423,6 +426,7 @@ For elastic modeling, FWI, and MT inversion, `OWL` can use a free-surface bounda
 |-----------|------|-------------|---------|----------|
 | `yn_free_surface` | logical | Whether to assume free surface boundary condition for the top surface | `.false.` | no |
 | `free_surface_dz_refine` | float | Near-surface vertical mesh-refinement factor | `4.0` | no |
+| `dz_max` | float | Upper bound on the vertical grid spacing of the near-surface-refined mesh; read only when `yn_free_surface` is true | `1.5*dz` | no |
 | `file_topo` | string | Topography file for a topographic free surface | `''` | no |
 | `topo_interp` | string | Interpolation method for the topography file | `cubic` | no |
 | `measure_source_depth_from_surface` | logical | Treat source z values as depths below the free surface | `.false.` | no |
@@ -455,9 +459,9 @@ For elastic modeling, FWI, and MT inversion, `OWL` can use a free-surface bounda
 | `file_<name>` | string | Binary file for the model/source parameter `<name>`, where `<name>` is any entry in `model_name`, `model_update`, or `model_aux`; examples include `file_vp`, `file_vs`, `file_rho`, `file_c11`, and `file_mt` | `''` | normally **yes** for each supplied forward or auxiliary model |
 | `min_vpvsratio` | float | Minimum allowed Vp/Vs ratio (elastic media) | `1.1` | no |
 | `max_vpvsratio` | float | Maximum allowed Vp/Vs ratio | `9.0` | no |
-| `vpvsratio_smoothx` | float | Gaussian smoothing length of Vp/Vs ratio in x (0 = off) | `0.0` | no |
-| `vpvsratio_smoothy` | float | Gaussian smoothing length of Vp/Vs ratio in y | `0.0` | no |
-| `vpvsratio_smoothz` | float | Gaussian smoothing length of Vp/Vs ratio in z | `0.0` | no |
+| `vpvsratio_smooth_x` | float | Gaussian smoothing length of Vp/Vs ratio in x (0 = off) | `0.0` | no |
+| `vpvsratio_smooth_y` | float | Gaussian smoothing length of Vp/Vs ratio in y | `0.0` | no |
+| `vpvsratio_smooth_z` | float | Gaussian smoothing length of Vp/Vs ratio in z | `0.0` | no |
 
 In the above parameters, `model_update` lists the parameters to update, while `model_aux` lists additional fixed parameters that are needed by the chosen parameterization but should not be updated. For example, an elastic inversion for `vp` only may still need `vs` and `rho` in `model_aux` so the solver can build the full medium.
 
@@ -526,8 +530,8 @@ For each model parameter `<name>`:
 
 | Parameter | Type | Description | Default | Required |
 |-----------|------|-------------|---------|----------|
-| `min_<name>` | float | Lower bound for model values during update | `0.0` (velocity), `0.0` (anisotropy), `0.0` (elastic constant) | no |
-| `max_<name>` | float | Upper bound for model values | `1e5` (velocity), `0.5` (anisotropy), `1e9` (elastic constant) | no |
+| `min_<name>` | float | Lower bound for model values during update | `0.0` for `vp`, `vs`, `rho`; `0.0` for `epsilon`, `delta`, `gamma`, `eta`; `0.0` for `theta`, `phi`; `0.0` for `c*`/`C*`; `10.0` for `qp`, `qs`; `-1.0e9` for `mt` | no |
+| `max_<name>` | float | Upper bound for model values | `1.0e5` for `vp`, `vs`, `rho`; `0.5` for `epsilon`, `delta`, `gamma`, `eta`; `pi` for `theta`, `phi`; `1.0e9` for `c*`/`C*`; unbounded for `qp`, `qs`; `1.0e9` for `mt` | no |
 | `step_max_<name>` | float | Maximum absolute perturbation allowed for one update of parameter `<name>`; used to set the initial model step and to reject oversized trial steps | `100.0` for `vp`, `vs`, `rho`; `0.1` for `epsilon`, `delta`, `gamma`, `eta`; `0.1*pi/2` for `theta`, `phi`; `1.0e9` for `c*`/`C*`; `1.0` for `mt` | no |
 
 #### > Search Direction
@@ -564,15 +568,18 @@ All three methods save `updated_<name>.bin` files in the iteration model directo
 |-----------|------|-------------|---------|----------|
 | `model_regularization_method` | string list | Regularization methods applied to model updates; empty disables model regularization | `['']` | no |
 | `source_regularization_method` | string list | Regularization methods applied to source updates; empty disables source regularization | `['']` | no |
+| `const_reg` | logical | Use a fixed regularization coefficient `reg_lambda_<name>` instead of the adaptive coefficient derived from `reg_scale_<name>`; iteration-dependent syntax supported | `.false.` | no |
+| `reg_lambda_<name>` | float | Regularization coefficient applied to parameter `<name>` when `const_reg` is true; iteration-dependent syntax supported | `0.0` | no |
+| `reg_scale_<name>` | float | When `const_reg` is false, the regularization coefficient for `<name>` is set adaptively to `reg_scale_<name>` times the ratio of the mean gradient to the mean regularization term; iteration-dependent syntax supported | `0.2` | no |
 
 Available model regularization methods are applied in the order listed:
 
 | Method | Associated Parameters | Description |
 |--------|-----------------------|-------------|
 | `tikhonov`, `Tikhonov` | `reg_tikhonov_lambda` (`10.0`) | Tikhonov denoising/damping |
-| `smooth` | `reg_smoothx`, `reg_smoothy` (3-D), `reg_smoothz`; or per-parameter `reg_smoothx_<name>`, `reg_smoothy_<name>` (3-D), `reg_smoothz_<name>` when the global value is negative | Gaussian smoothing regularization. Defaults are `-1.0` for global values and one grid spacing for per-parameter values |
+| `smooth` | `reg_smooth_x`, `reg_smooth_y` (3-D), `reg_smooth_z`; or per-parameter `reg_smooth_x_<name>`, `reg_smooth_y_<name>` (3-D), `reg_smooth_z_<name>` when the global value is negative | Gaussian smoothing regularization. Defaults are `-1.0` for global values and one grid spacing for per-parameter values |
 | `tgpv`, `TGpV` | `reg_tv_mu_<name>`, `reg_tv_lambda1`, `reg_tv_lambda2`, `reg_tv_norm`, `reg_tv_niter`; 2-D also supports per-parameter `reg_tv_lambda1_<name>` and `reg_tv_lambda2_<name>` when global values are `-1.0` | Total generalized p-variation/TV-style denoising. Defaults: `reg_tv_norm = 0.5`, `reg_tv_niter = 50`, `reg_tv_lambda1 = reg_tv_lambda2 = 1.0` in 3-D and per-parameter fallback in 2-D |
-| `structure` | `reg_andf_alpha`, `reg_andf_beta`, `reg_andf_gamma` (3-D), `reg_andf_smoothx`, `reg_andf_smoothy` (3-D), `reg_andf_smoothz`, `reg_andf_t`, `reg_andf_sigma`, `reg_andf_powerm`, `reg_andf_aux`, `reg_andf_coh` (2-D) | Structure-oriented anisotropic-diffusion regularization. Defaults are `alpha = 0.001`, `beta = 1.0`, `gamma = 1.0` in 3-D, `smoothx = 2.0`, `smoothy = 2.0` in 3-D, `smoothz = 8.0`, `sigma = 10.0`, `powerm = 4.0`; `reg_andf_t` defaults to `10` in 2-D and `5` in 3-D |
+| `structure` | `reg_andf_alpha`, `reg_andf_beta`, `reg_andf_gamma` (3-D), `reg_andf_smooth_x`, `reg_andf_smooth_y` (3-D), `reg_andf_smooth_z`, `reg_andf_t`, `reg_andf_sigma`, `reg_andf_powerm`, `reg_andf_aux`, `reg_andf_coh` (2-D) | Structure-oriented anisotropic-diffusion regularization. Defaults are `alpha = 0.001`, `beta = 1.0`, `gamma = 1.0` in 3-D, `smoothx = 2.0`, `smoothy = 2.0` in 3-D, `smoothz = 8.0`, `sigma = 10.0`, `powerm = 4.0`; `reg_andf_t` defaults to `10` in 2-D and `5` in 3-D |
 
 Many regularization parameters are read with iteration-aware readers, so values can be changed by iteration when supported by the parameter-file syntax.
 
@@ -588,21 +595,23 @@ Processing is specified as a list of steps applied in order.
 
 The processing parameter name is `process_shot_<name>`, where `<name>` is commonly `grad` for `process_shot_grad`. Per-shot processing uses shot-local grid spacing (`mdx`, `mdy`, `mdz`) and crops masks or auxiliary fields to the active shot domain.
 
+In 3-D, gradient-processing parameter names follow the same convention as in 2-D, with an additional `_y` entry for the second horizontal axis (for example `grad_smooth_x`, `grad_smooth_y`, `grad_smooth_z`). The earlier compact 3-D spellings (`grad_smoothx`, `grad_rmsbalx`, `grad_movingbalx`, `grad_taperx`, `grad_medianfiltx`, `grad_dipfiltzx`, `grad_wavenumx`, `grad_andf_rankx`, their `_y`/`_z` counterparts, and the `_amps` suffix) are no longer recognized; a parameter written with an old name is silently replaced by its default, so existing 3-D parameter files must be updated.
+
 Available per-shot gradient-processing steps:
 
 | Step | 2-D Parameters | 3-D Parameters | Description |
 |------|----------------|----------------|-------------|
-| `smooth` | `shot_<name>_smooth_x`, `shot_<name>_smooth_z` (`3*mdx`, `3*mdz`) | `shot_<name>_smoothx`, `shot_<name>_smoothy`, `shot_<name>_smoothz` (`3*mdx`, `3*mdy`, `3*mdz`) | Gaussian smoothing |
+| `smooth` | `shot_<name>_smooth_x`, `shot_<name>_smooth_z` (`3*mdx`, `3*mdz`) | `shot_<name>_smooth_x`, `shot_<name>_smooth_y`, `shot_<name>_smooth_z` (`3*mdx`, `3*mdy`, `3*mdz`) | Gaussian smoothing |
 | `max_balance` | none | none | Normalize by the maximum value |
 | `rms_balance` | none | none | Normalize by mean/RMS-style image energy |
-| `moving_balance` | `shot_<name>_moving_balance_x`, `shot_<name>_moving_balance_z` (`3*mdx`, `3*mdz`) | `shot_<name>_movingbalx`, `shot_<name>_movingbaly`, `shot_<name>_movingbalz` (`6*mdx`, `6*mdy`, `6*mdz`) | Moving-window amplitude balancing |
-| `median_filt` | `shot_<name>_median_filt_x`, `shot_<name>_median_filt_z` (`mdx`, `mdz`) | `shot_<name>_medianfiltx`, `shot_<name>_medianfilty`, `shot_<name>_medianfiltz` (`mdx`, `mdy`, `mdz`) | Median filtering |
-| `dip_filt` | `shot_<name>_dip_filt_zx`, `shot_<name>_dip_filt_zx_coefs` | `shot_<name>_dipfiltzx`, `shot_<name>_dipfiltzx_amps`, `shot_<name>_dipfiltzy`, `shot_<name>_dipfiltzy_amps`, `shot_<name>_dipfiltyx`, `shot_<name>_dipfiltyx_amps` | Dip-domain filtering |
+| `moving_balance` | `shot_<name>_moving_balance_x`, `shot_<name>_moving_balance_z` (`3*mdx`, `3*mdz`) | `shot_<name>_moving_balance_x`, `shot_<name>_moving_balance_y`, `shot_<name>_moving_balance_z` (`6*mdx`, `6*mdy`, `6*mdz`) | Moving-window amplitude balancing |
+| `median_filt` | `shot_<name>_median_filt_x`, `shot_<name>_median_filt_z` (`mdx`, `mdz`) | `shot_<name>_median_filt_x`, `shot_<name>_median_filt_y`, `shot_<name>_median_filt_z` (`mdx`, `mdy`, `mdz`) | Median filtering |
+| `dip_filt` | `shot_<name>_dip_filt_zx`, `shot_<name>_dip_filt_zx_coefs` | `shot_<name>_dip_filt_zx`, `shot_<name>_dip_filt_zx_coefs`, `shot_<name>_dip_filt_zy`, `shot_<name>_dip_filt_zy_coefs`, `shot_<name>_dip_filt_yx`, `shot_<name>_dip_filt_yx_coefs` | Dip-domain filtering |
 | `remove_nan` | none | none | Replace NaN/Inf values with finite values |
 | `laplace_filt` | not available | none | Apply a Laplacian filter |
-| `andf_filt` | `shot_<name>_andf_smooth_x`, `shot_<name>_andf_smooth_z`, `shot_<name>_andf_powerm`, `shot_<name>_andf_t`, `shot_<name>_andf_sigma`, `shot_<name>_andf_alpha`, `shot_<name>_andf_beta`, `shot_<name>_andf_aux`, `shot_<name>_andf_coh` | `shot_<name>_andf_smoothx`, `shot_<name>_andf_smoothy`, `shot_<name>_andf_smoothz`, `shot_<name>_andf_powerm`, `shot_<name>_andf_t`, `shot_<name>_andf_sigma`, `shot_<name>_andf_alpha`, `shot_<name>_andf_beta`, `shot_<name>_andf_gamma`, `shot_<name>_andf_aux`, `shot_<name>_andf_coh` | Structure-oriented anisotropic-diffusion filtering |
-| `wavenumber_filt` | `shot_<name>_wavenumber_filt_x`, `shot_<name>_wavenumber_filt_x_coefs`, `shot_<name>_wavenumber_filt_z`, `shot_<name>_wavenumber_filt_z_coefs` | `shot_<name>_wavenumx`, `shot_<name>_wavenumx_amps`, `shot_<name>_wavenumy`, `shot_<name>_wavenumy_amps`, `shot_<name>_wavenumz`, `shot_<name>_wavenumz_amps` | Wavenumber-domain filtering |
-| `taper` | `shot_<name>_taper_x`, `shot_<name>_taper_z` (`[0.0, 0.0]`) | `shot_<name>_taperx`, `shot_<name>_tapery`, `shot_<name>_taperz` (`[0.0, 0.0]`) | Blackman taper; one value is expanded to both sides |
+| `andf_filt` | `shot_<name>_andf_smooth_x`, `shot_<name>_andf_smooth_z`, `shot_<name>_andf_powerm`, `shot_<name>_andf_t`, `shot_<name>_andf_sigma`, `shot_<name>_andf_alpha`, `shot_<name>_andf_beta`, `shot_<name>_andf_aux`, `shot_<name>_andf_coh` | `shot_<name>_andf_smooth_x`, `shot_<name>_andf_smooth_y`, `shot_<name>_andf_smooth_z`, `shot_<name>_andf_powerm`, `shot_<name>_andf_t`, `shot_<name>_andf_sigma`, `shot_<name>_andf_alpha`, `shot_<name>_andf_beta`, `shot_<name>_andf_gamma`, `shot_<name>_andf_aux`, `shot_<name>_andf_coh` | Structure-oriented anisotropic-diffusion filtering |
+| `wavenumber_filt` | `shot_<name>_wavenumber_filt_x`, `shot_<name>_wavenumber_filt_x_coefs`, `shot_<name>_wavenumber_filt_z`, `shot_<name>_wavenumber_filt_z_coefs` | `shot_<name>_wavenumber_filt_x`, `shot_<name>_wavenumber_filt_x_coefs`, `shot_<name>_wavenumber_filt_y`, `shot_<name>_wavenumber_filt_y_coefs`, `shot_<name>_wavenumber_filt_z`, `shot_<name>_wavenumber_filt_z_coefs` | Wavenumber-domain filtering |
+| `taper` | `shot_<name>_taper_x`, `shot_<name>_taper_z` (`[0.0, 0.0]`) | `shot_<name>_taper_x`, `shot_<name>_taper_y`, `shot_<name>_taper_z` (`[0.0, 0.0]`) | Blackman taper; one value is expanded to both sides |
 | `mask` | `dir_shot_<name>_mask` or `shot_<name>_mask` | same | Multiply by a mask. Directory masks are read as `<dir_scratch>/shot_<sid>_mask.bin` under the supplied directory |
 | `adaptive_mute` | `shot_<name>_adaptive_mute_x`, `shot_<name>_adaptive_mute_z` | not available | Taper outside the source-receiver aperture in x/z |
 | `cone_mute` | `shot_<name>_cone_mute_x`, `shot_<name>_cone_mute_z`, `shot_<name>_cone_mute_power`, `shot_<name>_cone_mute_taper` | not available | Cone-shaped mute below the source |
@@ -612,9 +621,8 @@ Available per-shot gradient-processing steps:
 | Parameter | Type | Description | Default | Required |
 |-----------|------|-------------|---------|----------|
 | `process_grad` | string list | Processing steps applied to the stacked gradient | `['']` (none) | no |
-| `process_srch` | string list | Processing steps applied to the search direction | `['']` (none) | no |
 
-The processing parameter name is `process_<name>`, where `<name>` is commonly `grad` or `srch`. If the routine is called for a model parameter, `<param_name>_update_iter` can restrict updates to an iteration range; a single value means `[value, niter_max]`.
+The processing parameter name is `process_<name>`, where `<name>` is `grad`. If the routine is called for a model parameter, `<param_name>_update_iter` can restrict updates to an iteration range; a single value means `[value, niter_max]`.
 
 Available global gradient/search-direction processing steps:
 
@@ -623,15 +631,15 @@ Available global gradient/search-direction processing steps:
 | `scale` | `<name>_scale` (`1.0`) | same | Multiply by a scalar |
 | `max_balance` | none | not available | Normalize by maximum value |
 | `rms_balance` | none | none | Normalize by mean/RMS-style energy |
-| `rms_balance_x` | `<name>_rms_balance_x` (`dx`) | `<name>_rmsbalx` (`dx`) | Sliding RMS normalization along x |
-| `rms_balance_y` | not available | `<name>_rmsbaly` (`dy`) | Sliding RMS normalization along y |
-| `rms_balance_xy` | not available | `<name>_rmsbalx`, `<name>_rmsbaly` (`dx`, `dy`) | Sliding RMS normalization in x-y planes |
-| `rms_balance_z` | `<name>_rms_balance_z` (`dz`) | `<name>_rmsbalz` (`dz`) | Sliding RMS normalization along z |
-| `moving_balance` | `<name>_moving_balance_x`, `<name>_moving_balance_z` (`6*dx`, `6*dz`) | `<name>_movingbalx`, `<name>_movingbaly`, `<name>_movingbalz` (`3*dx`, `3*dy`, `3*dz`) | Moving-window amplitude balancing |
-| `taper` | `<name>_taper_x`, `<name>_taper_z` (`[0.0, 0.0]`) | `<name>_taperx`, `<name>_tapery`, `<name>_taperz` (`[0.0, 0.0]`) | Blackman taper |
-| `smooth` | `<name>_smooth_x`, `<name>_smooth_z` (`3*dx`, `3*dz`) | `<name>_smoothx`, `<name>_smoothy`, `<name>_smoothz` (`3*dx`, `3*dy`, `3*dz`) | Gaussian smoothing |
-| `andf_filt` | `<name>_andf_smooth_x`, `<name>_andf_smooth_z`, `<name>_andf_powerm`, `<name>_andf_t`, `<name>_andf_sigma`, `<name>_andf_alpha`, `<name>_andf_beta`, `<name>_andf_aux`, `<name>_andf_coh` | `<name>_andf_smoothx`, `<name>_andf_smoothy`, `<name>_andf_smoothz`, `<name>_andf_powerm`, `<name>_andf_t`, `<name>_andf_sigma`, `<name>_andf_alpha`, `<name>_andf_beta`, `<name>_andf_gamma`, `<name>_andf_aux`, `<name>_andf_coh`, `<name>_andf_rankx`, `<name>_andf_ranky`, `<name>_andf_rankz` | Structure-oriented anisotropic-diffusion filtering; 3-D uses MPI-aware filtering |
-| `median_filt` | `<name>_median_filt_x`, `<name>_median_filt_z` (`dx`, `dz`) | `<name>_medianfiltx`, `<name>_medianfilty`, `<name>_medianfiltz` (`dx`, `dy`, `dz`) | Median filtering |
+| `rms_balance_x` | `<name>_rms_balance_x` (`dx`) | `<name>_rms_balance_x` (`dx`) | Sliding RMS normalization along x |
+| `rms_balance_y` | not available | `<name>_rms_balance_y` (`dy`) | Sliding RMS normalization along y |
+| `rms_balance_xy` | not available | `<name>_rms_balance_x`, `<name>_rms_balance_y` (`dx`, `dy`) | Sliding RMS normalization in x-y planes |
+| `rms_balance_z` | `<name>_rms_balance_z` (`dz`) | `<name>_rms_balance_z` (`dz`) | Sliding RMS normalization along z |
+| `moving_balance` | `<name>_moving_balance_x`, `<name>_moving_balance_z` (`6*dx`, `6*dz`) | `<name>_moving_balance_x`, `<name>_moving_balance_y`, `<name>_moving_balance_z` (`3*dx`, `3*dy`, `3*dz`) | Moving-window amplitude balancing |
+| `taper` | `<name>_taper_x`, `<name>_taper_z` (`[0.0, 0.0]`) | `<name>_taper_x`, `<name>_taper_y`, `<name>_taper_z` (`[0.0, 0.0]`) | Blackman taper |
+| `smooth` | `<name>_smooth_x`, `<name>_smooth_z` (`3*dx`, `3*dz`) | `<name>_smooth_x`, `<name>_smooth_y`, `<name>_smooth_z` (`3*dx`, `3*dy`, `3*dz`) | Gaussian smoothing |
+| `andf_filt` | `<name>_andf_smooth_x`, `<name>_andf_smooth_z`, `<name>_andf_powerm`, `<name>_andf_t`, `<name>_andf_sigma`, `<name>_andf_alpha`, `<name>_andf_beta`, `<name>_andf_aux`, `<name>_andf_coh` | `<name>_andf_smooth_x`, `<name>_andf_smooth_y`, `<name>_andf_smooth_z`, `<name>_andf_powerm`, `<name>_andf_t`, `<name>_andf_sigma`, `<name>_andf_alpha`, `<name>_andf_beta`, `<name>_andf_gamma`, `<name>_andf_aux`, `<name>_andf_coh`, `<name>_andf_rank_x`, `<name>_andf_rank_y`, `<name>_andf_rank_z` | Structure-oriented anisotropic-diffusion filtering; 3-D uses MPI-aware filtering |
+| `median_filt` | `<name>_median_filt_x`, `<name>_median_filt_z` (`dx`, `dz`) | `<name>_median_filt_x`, `<name>_median_filt_y`, `<name>_median_filt_z` (`dx`, `dy`, `dz`) | Median filtering |
 | `mask` | `<name>_mask` | same | Multiply by a model-sized mask |
 
 Many global processing parameters are read with iteration-aware readers, so values can be changed by iteration when supported by the parameter-file syntax.

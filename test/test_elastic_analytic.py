@@ -102,7 +102,7 @@ def build_inputs():
         recv_positions())
     write_param(os.path.join(WORK, 'param.rb'), {
         'nx': NX, 'nz': NZ, 'dx': DX, 'dz': DZ,
-        'pml': PML,
+        'npml': PML,
         'dt': DT, 'data_dt': DT, 'tmax': TMAX,
         'ns': 1,
         'file_geometry': './geometry/geometry.txt',

@@ -55,7 +55,7 @@ Currently, `OWL` does not support wave modeling or FWI in:
 
 These features may be included in future releases.
 
-This work was supported by Los Alamos National Laboratory (LANL) Laboratory Directed Research and Development (LDRD) project 20240322ER. LANL is operated by Triad National Security, LLC, for the National Nuclear Security Administration (NNSA) of the U.S. Department of Energy (DOE) under Contract No. 89233218CNA000001. The research used high-performance computing resources provided by LANL's Institutional Computing program.
+This work was supported by Los Alamos National Laboratory (LANL) Laboratory Directed Research and Development (LDRD) program. LANL is operated by Triad National Security, LLC, for the National Nuclear Security Administration (NNSA) of the U.S. Department of Energy (DOE) under Contract No. 89233218CNA000001. The research used high-performance computing resources provided by LANL's Institutional Computing program.
 
 The code is released under LANL open source approval reference O4921.
 
@@ -84,6 +84,8 @@ ruby install.rb clean
 ```
 
 Several examples are included in the `example` directory.
+
+> **Caution on parameter names.** `OWL`'s parameter names are not interchangeable with those of [`LATTE`](https://github.com/lanl/latte_traveltime) or other packages from the same authors, even where the parameters play the same role. In particular, `OWL` spells directional smoothing, balancing, taper and filter parameters with an underscore before the axis, e.g. `grad_smooth_x`, `grad_smooth_y`, `grad_smooth_z`, `reg_smooth_x`, `vpvsratio_smooth_x`, whereas `LATTE` uses `grad_smoothx`, `grad_smoothz`, etc. A parameter name that `OWL` does not recognize is silently replaced by its default value rather than reported as an error, so a `LATTE`-style name in an `OWL` parameter file has no effect. Please refer to [doc/README.md](doc/README.md) for the complete list of `OWL` parameter names and use caution when adapting parameter files from other packages.
 
 # License
 &copy; 2025-2026. Triad National Security, LLC. All rights reserved.

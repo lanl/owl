@@ -184,13 +184,13 @@ contains
                     end if
 
                 case ('smooth')
-                    call readpar_xfloat(file_parameter, 'reg_smoothx', reg_smoothx, -1.0, iter*1.0)
+                    call readpar_xfloat(file_parameter, 'reg_smooth_x', reg_smoothx, -1.0, iter*1.0)
                     if (reg_smoothx < 0) then
-                        call readpar_xfloat(file_parameter, 'reg_smoothx_'//tidy(name), reg_smoothx, 1.0*dx, iter*1.0)
+                        call readpar_xfloat(file_parameter, 'reg_smooth_x_'//tidy(name), reg_smoothx, 1.0*dx, iter*1.0)
                     end if
-                    call readpar_xfloat(file_parameter, 'reg_smoothz', reg_smoothz, -1.0, iter*1.0)
+                    call readpar_xfloat(file_parameter, 'reg_smooth_z', reg_smoothz, -1.0, iter*1.0)
                     if (reg_smoothz < 0) then
-                        call readpar_xfloat(file_parameter, 'reg_smoothz_'//tidy(name), reg_smoothz, 1.0*dz, iter*1.0)
+                        call readpar_xfloat(file_parameter, 'reg_smooth_z_'//tidy(name), reg_smoothz, 1.0*dz, iter*1.0)
                     end if
 
                     if (present(smooth_inverse) .and. smooth_inverse) then
@@ -224,8 +224,8 @@ contains
                 case ('structure')
                     call readpar_xfloat(file_parameter, 'reg_andf_alpha', param%lambda1, 0.001, iter*1.0)
                     call readpar_xfloat(file_parameter, 'reg_andf_beta', param%lambda2, 1.0, iter*1.0)
-                    call readpar_xfloat(file_parameter, 'reg_andf_smoothx', param%smooth2, 2.0, iter*1.0)
-                    call readpar_xfloat(file_parameter, 'reg_andf_smoothz', param%smooth1, 8.0, iter*1.0)
+                    call readpar_xfloat(file_parameter, 'reg_andf_smooth_x', param%smooth2, 2.0, iter*1.0)
+                    call readpar_xfloat(file_parameter, 'reg_andf_smooth_z', param%smooth1, 8.0, iter*1.0)
                     call readpar_xint(file_parameter, 'reg_andf_t', param%niter, 10, iter*1.0)
                     call readpar_xfloat(file_parameter, 'reg_andf_sigma', param%sigma, 10.0, iter*1.0)
                     call readpar_xfloat(file_parameter, 'reg_andf_powerm', param%powerm, 4.0, iter*1.0)

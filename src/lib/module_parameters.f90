@@ -399,9 +399,9 @@ contains
 
         call readpar_float(file_parameter, 'min_vpvsratio', min_vpvsratio, 1.1)
         call readpar_float(file_parameter, 'max_vpvsratio', max_vpvsratio, 9.0)
-        call readpar_float(file_parameter, 'vpvsratio_smoothx', vpvsratio_smoothx, 0.0)
-        call readpar_float(file_parameter, 'vpvsratio_smoothy', vpvsratio_smoothy, 0.0)
-        call readpar_float(file_parameter, 'vpvsratio_smoothz', vpvsratio_smoothz, 0.0)
+        call readpar_float(file_parameter, 'vpvsratio_smooth_x', vpvsratio_smoothx, 0.0)
+        call readpar_float(file_parameter, 'vpvsratio_smooth_y', vpvsratio_smoothy, 0.0)
+        call readpar_float(file_parameter, 'vpvsratio_smooth_z', vpvsratio_smoothz, 0.0)
 
         !================================================================================
 

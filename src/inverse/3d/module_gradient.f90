@@ -568,9 +568,9 @@ contains
 
                 case ('smooth')
                     ! Gaussian smooth
-                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_smoothx', shot_w_smoothx, 3*mdx)
-                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_smoothy', shot_w_smoothy, 3*mdy)
-                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_smoothz', shot_w_smoothz, 3*mdz)
+                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_smooth_x', shot_w_smoothx, 3*mdx)
+                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_smooth_y', shot_w_smoothy, 3*mdy)
+                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_smooth_z', shot_w_smoothz, 3*mdz)
                     grd%array = gauss_filt(grd%array, [shot_w_smoothz/mdz, shot_w_smoothy/mdy, shot_w_smoothx/mdx])
 
                 case ('max_balance')
@@ -584,34 +584,34 @@ contains
 
                 case ('moving_balance')
                     ! Moving balance
-                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_movingbalx', shot_w_movingbalx, 6*mdx)
-                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_movingbaly', shot_w_movingbaly, 6*mdy)
-                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_movingbalz', shot_w_movingbalz, 6*mdz)
+                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_moving_balance_x', shot_w_movingbalx, 6*mdx)
+                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_moving_balance_y', shot_w_movingbaly, 6*mdy)
+                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_moving_balance_z', shot_w_movingbalz, 6*mdz)
                     grd%array = balance_filt(grd%array, nint([0.5*shot_w_movingbalz/mdz, 0.5*shot_w_movingbaly/mdy, 0.5*shot_w_movingbalx/mdx]), 0.01)
 
                 case ('median_filt')
                     ! Median filtering
-                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_medianfiltx', shot_w_medianfiltx, mdx)
-                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_medianfilty', shot_w_medianfilty, mdy)
-                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_medianfiltz', shot_w_medianfiltz, mdz)
+                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_median_filt_x', shot_w_medianfiltx, mdx)
+                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_median_filt_y', shot_w_medianfilty, mdy)
+                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_median_filt_z', shot_w_medianfiltz, mdz)
                     grd%array = median_filt(grd%array, nint([shot_w_medianfiltz/mdz, shot_w_medianfilty/mdy, shot_w_medianfiltx/mdx]))
 
                 case ('dip_filt')
                     ! Dip filtering
-                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_dipfiltzx', fkdips, [-100.0, 0.0, 100.0])
-                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_dipfiltzx_amps', fkdipamps, [0.0, 0.0, 0.0])
+                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_dip_filt_zx', fkdips, [-100.0, 0.0, 100.0])
+                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_dip_filt_zx_coefs', fkdipamps, [0.0, 0.0, 0.0])
                     if (sum(abs(fkdipamps)) > 0) then
                         grd%array = dip_filt(grd%array, [1.0, dy/dz, dx/dz], fkdips, fkdipamps, 13)
                     end if
 
-                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_dipfiltzy', fkdips, [-100.0, 0.0, 100.0])
-                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_dipfiltzy_amps', fkdipamps, [0.0, 0.0, 0.0])
+                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_dip_filt_zy', fkdips, [-100.0, 0.0, 100.0])
+                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_dip_filt_zy_coefs', fkdipamps, [0.0, 0.0, 0.0])
                     if (sum(abs(fkdipamps)) > 0) then
                         grd%array = dip_filt(grd%array, [1.0, dy/dz, dx/dz], fkdips, fkdipamps, 12)
                     end if
 
-                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_dipfiltyx', fkdips, [-100.0, 0.0, 100.0])
-                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_dipfiltyx_amps', fkdipamps, [0.0, 0.0, 0.0])
+                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_dip_filt_yx', fkdips, [-100.0, 0.0, 100.0])
+                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_dip_filt_yx_coefs', fkdipamps, [0.0, 0.0, 0.0])
                     if (sum(abs(fkdipamps)) > 0) then
                         grd%array = dip_filt(grd%array, [1.0, dy/dz, dx/dz], fkdips, fkdipamps, 23)
                     end if
@@ -625,9 +625,9 @@ contains
 
                 case ('andf_filt')
                     ! Structure-oriented nonlinear anisotropic diffusion filtering
-                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_andf_smoothx', param%smooth3, 2*mdx)
-                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_andf_smoothy', param%smooth2, 2*mdy)
-                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_andf_smoothz', param%smooth1, 8*mdz)
+                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_andf_smooth_x', param%smooth3, 2*mdx)
+                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_andf_smooth_y', param%smooth2, 2*mdy)
+                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_andf_smooth_z', param%smooth1, 8*mdz)
                     param%smooth3 = param%smooth3/mdx
                     param%smooth2 = param%smooth2/mdy
                     param%smooth1 = param%smooth1/mdz
@@ -664,8 +664,8 @@ contains
 
                 case ('wavenumber_filt')
                     ! Wavenumber-domain filtering in x-axis
-                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_wavenumx', wavenums, [-1.0])
-                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_wavenumx_amps', wamps, [-1.0])
+                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_wavenumber_filt_x', wavenums, [-1.0])
+                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_wavenumber_filt_x_coefs', wamps, [-1.0])
                     if (wavenums(1) >= 0) then
                         !$omp parallel do private(j, k)
                         do k = 1, size(grd%array, 1)
@@ -677,8 +677,8 @@ contains
                     end if
 
                     ! Wavenumber-domain filtering in x-axis
-                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_wavenumy', wavenums, [-1.0])
-                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_wavenumy_amps', wamps, [-1.0])
+                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_wavenumber_filt_y', wavenums, [-1.0])
+                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_wavenumber_filt_y_coefs', wamps, [-1.0])
                     if (wavenums(1) >= 0) then
                         !$omp parallel do private(j, k)
                         do k = 1, size(grd%array, 1)
@@ -690,8 +690,8 @@ contains
                     end if
 
                     ! Wavenumber-domain filtering in z-axis
-                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_wavenumz', wavenums, [-1.0])
-                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_wavenumz_amps', wamps, [-1.0])
+                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_wavenumber_filt_z', wavenums, [-1.0])
+                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_wavenumber_filt_z_coefs', wamps, [-1.0])
                     if (wavenums(1) >= 0) then
                         !$omp parallel do private(j, k)
                         do k = 1, size(grd%array, 2)
@@ -717,9 +717,9 @@ contains
 
                 case ('taper')
                     ! Tapering
-                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_taperx', shot_w_taperx, [0.0, 0.0])
-                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_tapery', shot_w_tapery, [0.0, 0.0])
-                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_taperz', shot_w_taperz, [0.0, 0.0])
+                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_taper_x', shot_w_taperx, [0.0, 0.0])
+                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_taper_y', shot_w_tapery, [0.0, 0.0])
+                    call readpar_nfloat(file_parameter, 'shot_'//tidy(name)//'_taper_z', shot_w_taperz, [0.0, 0.0])
                     if (size(shot_w_taperx) == 1) then
                         call alloc_array(shot_w_taperx, [1, 2], source=[shot_w_taperx(1), shot_w_taperx(1)])
                     end if
@@ -805,15 +805,15 @@ contains
                     w = w*w_scalar
 
                 case ('moving_balance')
-                    call readpar_xfloat(file_parameter, tidy(name)//'_movingbalx', w_movingbalx, 3*dx, iter*1.0)
-                    call readpar_xfloat(file_parameter, tidy(name)//'_movingbaly', w_movingbaly, 3*dy, iter*1.0)
-                    call readpar_xfloat(file_parameter, tidy(name)//'_movingbalz', w_movingbalz, 3*dz, iter*1.0)
+                    call readpar_xfloat(file_parameter, tidy(name)//'_moving_balance_x', w_movingbalx, 3*dx, iter*1.0)
+                    call readpar_xfloat(file_parameter, tidy(name)//'_moving_balance_y', w_movingbaly, 3*dy, iter*1.0)
+                    call readpar_xfloat(file_parameter, tidy(name)//'_moving_balance_z', w_movingbalz, 3*dz, iter*1.0)
                     w = balance_filt(w, nint([0.5*w_movingbalz/dz, 0.5*w_movingbaly/dy, 0.5*w_movingbalx/dx]), 0.01)
 
                 case ('taper')
-                    call readpar_nfloat(file_parameter, tidy(name)//'_taperx', w_taperx, [0.0, 0.0])
-                    call readpar_nfloat(file_parameter, tidy(name)//'_tapery', w_tapery, [0.0, 0.0])
-                    call readpar_nfloat(file_parameter, tidy(name)//'_taperz', w_taperz, [0.0, 0.0])
+                    call readpar_nfloat(file_parameter, tidy(name)//'_taper_x', w_taperx, [0.0, 0.0])
+                    call readpar_nfloat(file_parameter, tidy(name)//'_taper_y', w_tapery, [0.0, 0.0])
+                    call readpar_nfloat(file_parameter, tidy(name)//'_taper_z', w_taperz, [0.0, 0.0])
                     if (size(w_taperx) == 1) then
                         call alloc_array(w_taperx, [1, 2], source=[w_taperx(1), w_taperx(1)])
                     end if
@@ -827,15 +827,15 @@ contains
                         ['blackman', 'blackman', 'blackman', 'blackman', 'blackman', 'blackman'])
 
                 case ('smooth')
-                    call readpar_xfloat(file_parameter, tidy(name)//'_smoothx', w_smoothx, 3*dx, iter*1.0)
-                    call readpar_xfloat(file_parameter, tidy(name)//'_smoothy', w_smoothy, 3*dy, iter*1.0)
-                    call readpar_xfloat(file_parameter, tidy(name)//'_smoothz', w_smoothz, 3*dz, iter*1.0)
+                    call readpar_xfloat(file_parameter, tidy(name)//'_smooth_x', w_smoothx, 3*dx, iter*1.0)
+                    call readpar_xfloat(file_parameter, tidy(name)//'_smooth_y', w_smoothy, 3*dy, iter*1.0)
+                    call readpar_xfloat(file_parameter, tidy(name)//'_smooth_z', w_smoothz, 3*dz, iter*1.0)
                     w = gauss_filt(w, [w_smoothz/dz, w_smoothy/dy, w_smoothx/dx])
 
                 case ('andf_filt')
-                    call readpar_xfloat(file_parameter, tidy(name)//'_andf_smoothx', param%smooth3, 2*dx, iter*1.0)
-                    call readpar_xfloat(file_parameter, tidy(name)//'_andf_smoothy', param%smooth2, 2*dy, iter*1.0)
-                    call readpar_xfloat(file_parameter, tidy(name)//'_andf_smoothz', param%smooth1, 8*dz, iter*1.0)
+                    call readpar_xfloat(file_parameter, tidy(name)//'_andf_smooth_x', param%smooth3, 2*dx, iter*1.0)
+                    call readpar_xfloat(file_parameter, tidy(name)//'_andf_smooth_y', param%smooth2, 2*dy, iter*1.0)
+                    call readpar_xfloat(file_parameter, tidy(name)//'_andf_smooth_z', param%smooth1, 8*dz, iter*1.0)
                     param%smooth3 = param%smooth3/dx
                     param%smooth2 = param%smooth2/dy
                     param%smooth1 = param%smooth1/dz
@@ -848,9 +848,9 @@ contains
                     call readpar_xfloat(file_parameter, tidy(name)//'_andf_gamma', param%lambda3, 1.0, iter*1.0)
                     call readpar_xstring(file_parameter, tidy(name)//'_andf_aux', file_andf_aux, '', iter*1.0)
                     call readpar_xstring(file_parameter, tidy(name)//'_andf_coh', file_andf_coh, '', iter*1.0)
-                    call readpar_int(file_parameter, tidy(name)//'_andf_rankx', rank3, 1)
-                    call readpar_int(file_parameter, tidy(name)//'_andf_ranky', rank2, 1)
-                    call readpar_int(file_parameter, tidy(name)//'_andf_rankz', rank1, 1)
+                    call readpar_int(file_parameter, tidy(name)//'_andf_rank_x', rank3, 1)
+                    call readpar_int(file_parameter, tidy(name)//'_andf_rank_y', rank2, 1)
+                    call readpar_int(file_parameter, tidy(name)//'_andf_rank_z', rank1, 1)
                     if (file_andf_aux == '' .and. file_andf_coh == '') then
                         w = andf_filt_mpi(w, param)
                     else if (file_andf_aux /= '' .and. file_andf_coh == '') then
@@ -866,9 +866,9 @@ contains
                     end if
 
                 case ('median_filt')
-                    call readpar_xfloat(file_parameter, tidy(name)//'_medianfiltx', w_medianfiltx, dx, iter*1.0)
-                    call readpar_xfloat(file_parameter, tidy(name)//'_medianfilty', w_medianfilty, dy, iter*1.0)
-                    call readpar_xfloat(file_parameter, tidy(name)//'_medianfiltz', w_medianfiltz, dz, iter*1.0)
+                    call readpar_xfloat(file_parameter, tidy(name)//'_median_filt_x', w_medianfiltx, dx, iter*1.0)
+                    call readpar_xfloat(file_parameter, tidy(name)//'_median_filt_y', w_medianfilty, dy, iter*1.0)
+                    call readpar_xfloat(file_parameter, tidy(name)//'_median_filt_z', w_medianfiltz, dz, iter*1.0)
                     w = median_filt(w, nint([w_medianfiltz/dz, w_medianfilty/dy, w_medianfiltx/dx]))
 
                 case ('rms_balance')
@@ -877,7 +877,7 @@ contains
                     end if
 
                 case ('rms_balance_x')
-                    call readpar_xfloat(file_parameter, tidy(name)//'_rmsbalx', w_rmsbalx, 1.0*dx, iter*1.0)
+                    call readpar_xfloat(file_parameter, tidy(name)//'_rms_balance_x', w_rmsbalx, 1.0*dx, iter*1.0)
                     wrx = nint(w_rmsbalx/dx)
                     if (mod(wrx, 2) == 0) then
                         wrx = wrx - 1
@@ -892,7 +892,7 @@ contains
                     w = return_normal(w)
 
                 case ('rms_balance_y')
-                    call readpar_xfloat(file_parameter, tidy(name)//'_rmsbaly', w_rmsbaly, 1.0*dy, iter*1.0)
+                    call readpar_xfloat(file_parameter, tidy(name)//'_rms_balance_y', w_rmsbaly, 1.0*dy, iter*1.0)
                     wry = nint(w_rmsbaly/dy)
                     if (mod(wry, 2) == 0) then
                         wry = wry - 1
@@ -907,8 +907,8 @@ contains
                     w = return_normal(w)
 
                 case ('rms_balance_xy')
-                    call readpar_xfloat(file_parameter, tidy(name)//'_rmsbalx', w_rmsbalx, 1.0*dx, iter*1.0)
-                    call readpar_xfloat(file_parameter, tidy(name)//'_rmsbaly', w_rmsbaly, 1.0*dy, iter*1.0)
+                    call readpar_xfloat(file_parameter, tidy(name)//'_rms_balance_x', w_rmsbalx, 1.0*dx, iter*1.0)
+                    call readpar_xfloat(file_parameter, tidy(name)//'_rms_balance_y', w_rmsbaly, 1.0*dy, iter*1.0)
                     wrx = nint(w_rmsbalx/dx)
                     if (mod(wrx, 2) == 0) then
                         wrx = wrx - 1
@@ -929,7 +929,7 @@ contains
                     w = return_normal(w)
 
                 case ('rms_balance_z')
-                    call readpar_xfloat(file_parameter, tidy(name)//'_rmsbalz', w_rmsbalz, 1.0*dz, iter*1.0)
+                    call readpar_xfloat(file_parameter, tidy(name)//'_rms_balance_z', w_rmsbalz, 1.0*dz, iter*1.0)
                     wrz = nint(w_rmsbalz/dz)
                     if (mod(wrz, 2) == 0) then
                         wrz = wrz - 1
