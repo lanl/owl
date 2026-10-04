@@ -1,5 +1,5 @@
 !
-! © 2025. Triad National Security, LLC. All rights reserved.
+! © 2025-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -200,6 +200,20 @@ contains
         call commute_array_group(vy, fdhalf)
         call commute_array_group(vz, fdhalf)
 
+        ! The pressure is odd about the free surface (k = 1), so vz is even: mirror vz above the
+        ! surface, vz(-z) = vz(z). The z-derivative stencil of the pressure update reads up to fdhalf
+        ! rows above the surface; leaving zeros there makes vz discontinuous at the surface, an error
+        ! that does not vanish with grid refinement. With a free surface the blocks start at k = 1,
+        ! so these rows are the halo above the top block; the mirror follows the exchange so that it
+        ! reads valid rows.
+        !$omp parallel do private(k) schedule(auto)
+        do k = 1, fdhalf
+            if (2 - k >= nz1 - fdhalf .and. 1 + k <= nz2 + fdhalf) then
+                vz(:, :, 2 - k) = vz(:, :, 1 + k)
+            end if
+        end do
+        !$omp end parallel do
+
         ! Update p
         !$omp parallel do private(i, j, k, pdxvx, pdyvy, pdzvz) collapse(3) schedule(auto)
         do k = max(2, nz1), nz2
@@ -236,20 +250,18 @@ contains
         end do
         !$omp end parallel do
 
-        ! Mirroring p to above-free-surface region
-        if (nz1 <= 0) then
-            !$omp parallel do private(i, j, k) collapse(3) schedule(auto)
-            do k = max(-pml + 1, nz1), min(0, nz2)
-                do j = ny1, ny2
-                    do i = nx1, nx2
-                        p(i, j, k) = -p(i, j, 2 - k)
-                    end do
-                end do
-            end do
-            !$omp end parallel do
-        end if
-
         call commute_array_group(p, fdhalf)
+
+        ! Mirror p above the free surface, p(-z) = -p(z). With a free surface the blocks start at
+        ! k = 1, so these rows are the halo above the top block; the mirror follows the exchange so
+        ! that it reads valid rows also in a top block thinner than fdhalf + 1
+        !$omp parallel do private(k) schedule(auto)
+        do k = 1, fdhalf
+            if (1 - k >= nz1 - fdhalf .and. 1 + k <= nz2 + fdhalf) then
+                p(:, :, 1 - k) = -p(:, :, 1 + k)
+            end if
+        end do
+        !$omp end parallel do
 
         !$omp parallel do private(i, j, k, pdxp, pdyp, pdzp) collapse(3) schedule(auto)
         do k = max(1, nz1), nz2
@@ -319,15 +331,21 @@ contains
     !
     !> Add source
     !
+    !> With a free surface (p = 0), every source comes with its mirror image (see
+    !> add_source_value_3d): the pressure and the horizontal particle velocities are odd about the
+    !> surface (image opposite to the source), and the vertical particle velocity is even (image equal
+    !> to the source). A pressure source on the surface therefore radiates nothing.
+    !
     subroutine add_source(t)
 
         integer, intent(in) :: t
 
-        integer :: k
-        integer :: sgx, sgy, sgz, nbeg, nend
-        real :: polar, azimuth, amp
-        integer :: irx, iry, irz
+        integer :: k, nbeg, nend
+        real :: polar, azimuth, amp, a
         real :: rho_s(1:1)
+        integer, dimension(6) :: block
+
+        block = [nx1_interior, nx2_interior, ny1_interior, ny2_interior, nz1_interior, nz2_interior]
 
         do k = 1, sgmtr%ns
 
@@ -338,104 +356,40 @@ contains
 
                 amp = sgmtr%srcr(k)%stf(t - nbeg + 1)*sgmtr%srcr(k)%amp*dt
 
-                select case (sgmtr%srcr(k)%mechanism)
+                associate (s => sgmtr%srcr(k))
+
+                select case (s%mechanism)
 
                     case ('force')
                         ! Force vector
-                        polar = sgmtr%srcr(k)%polar
-                        azimuth = sgmtr%srcr(k)%azimuth
-
-                        sgx = sgmtr%srcr(k)%gx
-                        sgy = sgmtr%srcr(k)%gy
-                        sgz = sgmtr%srcr(k)%gz
+                        polar = s%polar
+                        azimuth = s%azimuth
 
                         rho_s = 0
-                        if (is_in_block(sgx, sgy, sgz)) then
-                            rho_s = rho(sgx, sgy, sgz)
+                        if (is_in_block(s%gx, s%gy, s%gz)) then
+                            rho_s = rho(s%gx, s%gy, s%gz)
                         end if
                         call allreduce_array_group(rho_s)
                         amp = amp/rho_s(1)
 
-                        sgx = sgmtr%srcr(k)%hx
-                        sgy = sgmtr%srcr(k)%gy
-                        sgz = sgmtr%srcr(k)%gz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        vx(sgx + irx, sgy + iry, sgz + irz) = &
-                                            vx(sgx + irx, sgy + iry, sgz + irz) + sin(polar)*cos(azimuth)*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
-
-                        sgx = sgmtr%srcr(k)%gx
-                        sgy = sgmtr%srcr(k)%hy
-                        sgz = sgmtr%srcr(k)%gz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        vy(sgx + irx, sgy + iry, sgz + irz) = &
-                                            vy(sgx + irx, sgy + iry, sgz + irz) + sin(polar)*sin(azimuth)*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
-
-                        sgx = sgmtr%srcr(k)%gx
-                        sgy = sgmtr%srcr(k)%gy
-                        sgz = sgmtr%srcr(k)%hz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        vz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            vz(sgx + irx, sgy + iry, sgz + irz) + cos(polar)*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
+                        a = sin(polar)*cos(azimuth)*amp
+                        call add_source_value_3d(vx, s%hx, s%gy, s%gz, s%interp_hx, s%interp_iy, s%interp_iz, &
+                            a, -a, .false., yn_free_surface, block)
+                        a = sin(polar)*sin(azimuth)*amp
+                        call add_source_value_3d(vy, s%gx, s%hy, s%gz, s%interp_ix, s%interp_hy, s%interp_iz, &
+                            a, -a, .false., yn_free_surface, block)
+                        a = cos(polar)*amp
+                        call add_source_value_3d(vz, s%gx, s%gy, s%hz, s%interp_ix, s%interp_iy, s%interp_hz, &
+                            a, a, .true., yn_free_surface, block)
 
                     case ('explosion')
                         ! Explosive source
-
-                        sgx = sgmtr%srcr(k)%gx
-                        sgy = sgmtr%srcr(k)%gy
-                        sgz = sgmtr%srcr(k)%gz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        p(sgx + irx, sgy + iry, sgz + irz) = &
-                                            p(sgx + irx, sgy + iry, sgz + irz) + amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
+                        call add_source_value_3d(p, s%gx, s%gy, s%gz, s%interp_ix, s%interp_iy, s%interp_iz, &
+                            amp, -amp, .false., yn_free_surface, block)
 
                 end select
+
+                end associate
 
             end if
 

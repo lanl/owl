@@ -1,5 +1,5 @@
 !
-! © 2025. Triad National Security, LLC. All rights reserved.
+! © 2025-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -1552,28 +1552,6 @@ contains
         real :: dax, day, daz
         real :: a, b, ax, ay, az, bx, by, bz, kx, ky, kz
 
-        ! Set particle velocities above the free surface to zero
-        !$omp parallel do private(k) schedule(auto)
-        do k = 1, fdhalf
-            if (1 - k >= nz1 .and. 1 - k <= nz2) then
-                vx_hxiyiz(:, :, 1 - k) = 0.0
-                vy_hxiyiz(:, :, 1 - k) = 0.0
-                vz_hxiyiz(:, :, 1 - k) = 0.0
-                vx_ixhyiz(:, :, 1 - k) = 0.0
-                vy_ixhyiz(:, :, 1 - k) = 0.0
-                vz_ixhyiz(:, :, 1 - k) = 0.0
-            end if
-            if (2 - k >= nz1 .and. 2 - k <= nz2) then
-                vx_ixiyhz(:, :, 2 - k) = 0.0
-                vy_ixiyhz(:, :, 2 - k) = 0.0
-                vz_ixiyhz(:, :, 2 - k) = 0.0
-                vx_hxhyhz(:, :, 2 - k) = 0.0
-                vy_hxhyhz(:, :, 2 - k) = 0.0
-                vz_hxhyhz(:, :, 2 - k) = 0.0
-            end if
-        end do
-        !$omp end parallel do
-
         ! Exchange boundary wavefields
         call commute_array_group(vx_hxiyiz, fdhalf)
         call commute_array_group(vy_hxiyiz, fdhalf)
@@ -1587,6 +1565,33 @@ contains
         call commute_array_group(vx_hxhyhz, fdhalf)
         call commute_array_group(vy_hxhyhz, fdhalf)
         call commute_array_group(vz_hxhyhz, fdhalf)
+
+        ! Mirror the particle velocities above the free surface (k = 1), v(-eta) = v(eta). The
+        ! eta-derivative stencils of the stress update read up to fdhalf rows above the surface;
+        ! zeros there make the velocities discontinuous at the surface, an error that does not
+        ! vanish with grid refinement (surface amplitudes 6-8% too low), while the mirrored values
+        ! keep them continuous. With a free surface the blocks start at k = 1, so these rows are the
+        ! halo above the top block; the mirror follows the exchange so that it reads valid rows.
+        !$omp parallel do private(k) schedule(auto)
+        do k = 1, fdhalf
+            if (1 - k >= nz1 - fdhalf .and. 1 + k <= nz2 + fdhalf) then
+                vx_hxiyiz(:, :, 1 - k) = vx_hxiyiz(:, :, 1 + k)
+                vy_hxiyiz(:, :, 1 - k) = vy_hxiyiz(:, :, 1 + k)
+                vz_hxiyiz(:, :, 1 - k) = vz_hxiyiz(:, :, 1 + k)
+                vx_ixhyiz(:, :, 1 - k) = vx_ixhyiz(:, :, 1 + k)
+                vy_ixhyiz(:, :, 1 - k) = vy_ixhyiz(:, :, 1 + k)
+                vz_ixhyiz(:, :, 1 - k) = vz_ixhyiz(:, :, 1 + k)
+            end if
+            if (2 - k >= nz1 - fdhalf .and. 1 + k <= nz2 + fdhalf) then
+                vx_ixiyhz(:, :, 2 - k) = vx_ixiyhz(:, :, 1 + k)
+                vy_ixiyhz(:, :, 2 - k) = vy_ixiyhz(:, :, 1 + k)
+                vz_ixiyhz(:, :, 2 - k) = vz_ixiyhz(:, :, 1 + k)
+                vx_hxhyhz(:, :, 2 - k) = vx_hxhyhz(:, :, 1 + k)
+                vy_hxhyhz(:, :, 2 - k) = vy_hxhyhz(:, :, 1 + k)
+                vz_hxhyhz(:, :, 2 - k) = vz_hxhyhz(:, :, 1 + k)
+            end if
+        end do
+        !$omp end parallel do
 
         ! Stress set a (i, j, k)
         !$omp parallel do private(i, j, k, &
@@ -2375,47 +2380,6 @@ contains
         end do
         !$omp end parallel do
 
-        ! Apply mirror boundary condition to mimic free surface
-        ! It is possible that 1 - k or 2 - k are within the block, but their mirror points
-        ! are not. In this case, the communication must come before the mirroring.
-        !$omp parallel do private(k) schedule(auto)
-        do k = 1, fdhalf
-
-            if (1 - k >= nz1 .and. 1 - k <= nz2 .and. 1 + k >= nz1 - fdhalf + 1 .and. 1 + k <= nz2 + fdhalf) then
-                stressxx_ixiyiz(:, :, 1 - k) = -stressxx_ixiyiz(:, :, 1 + k)
-                stressyy_ixiyiz(:, :, 1 - k) = -stressyy_ixiyiz(:, :, 1 + k)
-                stresszz_ixiyiz(:, :, 1 - k) = -stresszz_ixiyiz(:, :, 1 + k)
-                stressyz_ixiyiz(:, :, 1 - k) = -stressyz_ixiyiz(:, :, 1 + k)
-                stressxz_ixiyiz(:, :, 1 - k) = -stressxz_ixiyiz(:, :, 1 + k)
-                stressxy_ixiyiz(:, :, 1 - k) = -stressxy_ixiyiz(:, :, 1 + k)
-
-                stressxx_hxhyiz(:, :, 1 - k) = -stressxx_hxhyiz(:, :, 1 + k)
-                stressyy_hxhyiz(:, :, 1 - k) = -stressyy_hxhyiz(:, :, 1 + k)
-                stresszz_hxhyiz(:, :, 1 - k) = -stresszz_hxhyiz(:, :, 1 + k)
-                stressyz_hxhyiz(:, :, 1 - k) = -stressyz_hxhyiz(:, :, 1 + k)
-                stressxz_hxhyiz(:, :, 1 - k) = -stressxz_hxhyiz(:, :, 1 + k)
-                stressxy_hxhyiz(:, :, 1 - k) = -stressxy_hxhyiz(:, :, 1 + k)
-            end if
-
-            if (2 - k >= nz1 .and. 2 - k <= nz2 .and. 1 + k >= nz1 - fdhalf + 1 .and. 1 + k <= nz2 + fdhalf) then
-                stressxx_hxiyhz(:, :, 2 - k) = -stressxx_hxiyhz(:, :, 1 + k)
-                stressyy_hxiyhz(:, :, 2 - k) = -stressyy_hxiyhz(:, :, 1 + k)
-                stresszz_hxiyhz(:, :, 2 - k) = -stresszz_hxiyhz(:, :, 1 + k)
-                stressyz_hxiyhz(:, :, 2 - k) = -stressyz_hxiyhz(:, :, 1 + k)
-                stressxz_hxiyhz(:, :, 2 - k) = -stressxz_hxiyhz(:, :, 1 + k)
-                stressxy_hxiyhz(:, :, 2 - k) = -stressxy_hxiyhz(:, :, 1 + k)
-
-                stressxx_ixhyhz(:, :, 2 - k) = -stressxx_ixhyhz(:, :, 1 + k)
-                stressyy_ixhyhz(:, :, 2 - k) = -stressyy_ixhyhz(:, :, 1 + k)
-                stresszz_ixhyhz(:, :, 2 - k) = -stresszz_ixhyhz(:, :, 1 + k)
-                stressyz_ixhyhz(:, :, 2 - k) = -stressyz_ixhyhz(:, :, 1 + k)
-                stressxz_ixhyhz(:, :, 2 - k) = -stressxz_ixhyhz(:, :, 1 + k)
-                stressxy_ixhyhz(:, :, 2 - k) = -stressxy_ixhyhz(:, :, 1 + k)
-            end if
-
-        end do
-        !$omp end parallel do
-
         ! Exchange boundary wavefields
         call commute_array_group(stressxx_ixiyiz, fdhalf)
         call commute_array_group(stressyy_ixiyiz, fdhalf)
@@ -2441,6 +2405,48 @@ contains
         call commute_array_group(stressxy_ixhyhz, fdhalf)
         call commute_array_group(stressxz_ixhyhz, fdhalf)
         call commute_array_group(stressyz_ixhyhz, fdhalf)
+
+        ! Apply mirror boundary condition to mimic free surface. With a free surface the blocks
+        ! start at k = 1, so the rows above it are the halo above the top block. The halo
+        ! exchange leaves that halo untouched, and mirroring after it also reads valid rows
+        ! 1 + k in a top block thinner than fdhalf + 1
+        !$omp parallel do private(k) schedule(auto)
+        do k = 1, fdhalf
+
+            if (1 - k >= nz1 - fdhalf .and. 1 + k <= nz2 + fdhalf) then
+                stressxx_ixiyiz(:, :, 1 - k) = -stressxx_ixiyiz(:, :, 1 + k)
+                stressyy_ixiyiz(:, :, 1 - k) = -stressyy_ixiyiz(:, :, 1 + k)
+                stresszz_ixiyiz(:, :, 1 - k) = -stresszz_ixiyiz(:, :, 1 + k)
+                stressyz_ixiyiz(:, :, 1 - k) = -stressyz_ixiyiz(:, :, 1 + k)
+                stressxz_ixiyiz(:, :, 1 - k) = -stressxz_ixiyiz(:, :, 1 + k)
+                stressxy_ixiyiz(:, :, 1 - k) = -stressxy_ixiyiz(:, :, 1 + k)
+
+                stressxx_hxhyiz(:, :, 1 - k) = -stressxx_hxhyiz(:, :, 1 + k)
+                stressyy_hxhyiz(:, :, 1 - k) = -stressyy_hxhyiz(:, :, 1 + k)
+                stresszz_hxhyiz(:, :, 1 - k) = -stresszz_hxhyiz(:, :, 1 + k)
+                stressyz_hxhyiz(:, :, 1 - k) = -stressyz_hxhyiz(:, :, 1 + k)
+                stressxz_hxhyiz(:, :, 1 - k) = -stressxz_hxhyiz(:, :, 1 + k)
+                stressxy_hxhyiz(:, :, 1 - k) = -stressxy_hxhyiz(:, :, 1 + k)
+            end if
+
+            if (2 - k >= nz1 - fdhalf .and. 1 + k <= nz2 + fdhalf) then
+                stressxx_hxiyhz(:, :, 2 - k) = -stressxx_hxiyhz(:, :, 1 + k)
+                stressyy_hxiyhz(:, :, 2 - k) = -stressyy_hxiyhz(:, :, 1 + k)
+                stresszz_hxiyhz(:, :, 2 - k) = -stresszz_hxiyhz(:, :, 1 + k)
+                stressyz_hxiyhz(:, :, 2 - k) = -stressyz_hxiyhz(:, :, 1 + k)
+                stressxz_hxiyhz(:, :, 2 - k) = -stressxz_hxiyhz(:, :, 1 + k)
+                stressxy_hxiyhz(:, :, 2 - k) = -stressxy_hxiyhz(:, :, 1 + k)
+
+                stressxx_ixhyhz(:, :, 2 - k) = -stressxx_ixhyhz(:, :, 1 + k)
+                stressyy_ixhyhz(:, :, 2 - k) = -stressyy_ixhyhz(:, :, 1 + k)
+                stresszz_ixhyhz(:, :, 2 - k) = -stresszz_ixhyhz(:, :, 1 + k)
+                stressyz_ixhyhz(:, :, 2 - k) = -stressyz_ixhyhz(:, :, 1 + k)
+                stressxz_ixhyhz(:, :, 2 - k) = -stressxz_ixhyhz(:, :, 1 + k)
+                stressxy_ixhyhz(:, :, 2 - k) = -stressxy_ixhyhz(:, :, 1 + k)
+            end if
+
+        end do
+        !$omp end parallel do
 
         ! Particle velocity set a (i+-1/2, j, k)
         !$omp parallel do private(i, j, k, &
@@ -2881,494 +2887,211 @@ contains
     end subroutine
 
     !
+    !> The part of a moment tensor m = (mxx, myy, mzz, myz, mxz, mxy) that the free surface admits at
+    !> the surface point (i, j). On the surface row, the stress update obtains the vertical
+    !> derivatives w of the particle velocities from the traction-free condition sigma . n = 0 with
+    !> n = (hx, hy, 1) (the 3x3 system coefiiz = tpcz*N^T C N of compute_topography_coefs). A moment
+    !> on the surface changes these derivatives such that its traction N^T m is cancelled, and the
+    !> stress this produces is removed from the moment,
+    !>     P(m) = m - C N (N^T C N)^(-1) N^T m,
+    !> where C is the 6x6 stiffness matrix and N maps w to the strain N w. On a flat surface in an
+    !> orthorhombic medium this is (mxx - c13/c33*mzz, myy - c23/c33*mzz, 0, 0, 0, mxy).
+    !
+    function surface_moment(i, j, m) result(p)
+
+        integer, intent(in) :: i, j
+        real, dimension(6), intent(in) :: m
+        real, dimension(6) :: p
+
+        real, dimension(6, 6) :: c
+        real, dimension(6, 3) :: n
+        real :: hx, hy
+
+        c(1, :) = [c11(i, j, 1), c12(i, j, 1), c13(i, j, 1), c14(i, j, 1), c15(i, j, 1), c16(i, j, 1)]
+        c(2, :) = [c12(i, j, 1), c22(i, j, 1), c23(i, j, 1), c24(i, j, 1), c25(i, j, 1), c26(i, j, 1)]
+        c(3, :) = [c13(i, j, 1), c23(i, j, 1), c33(i, j, 1), c34(i, j, 1), c35(i, j, 1), c36(i, j, 1)]
+        c(4, :) = [c14(i, j, 1), c24(i, j, 1), c34(i, j, 1), c44(i, j, 1), c45(i, j, 1), c46(i, j, 1)]
+        c(5, :) = [c15(i, j, 1), c25(i, j, 1), c35(i, j, 1), c45(i, j, 1), c55(i, j, 1), c56(i, j, 1)]
+        c(6, :) = [c16(i, j, 1), c26(i, j, 1), c36(i, j, 1), c46(i, j, 1), c56(i, j, 1), c66(i, j, 1)]
+
+        ! Strain (xx, yy, zz, yz, xz, xy) of the vertical velocity derivatives w = (wx, wy, wz)
+        hx = slopex_ixiy(i, j)
+        hy = slopey_ixiy(i, j)
+        n(1, :) = [hx, 0.0, 0.0]
+        n(2, :) = [0.0, hy, 0.0]
+        n(3, :) = [0.0, 0.0, 1.0]
+        n(4, :) = [0.0, 1.0, hy]
+        n(5, :) = [1.0, 0.0, hx]
+        n(6, :) = [hy, hx, 0.0]
+
+        p = m - matmul(c, matmul(n, solve(matmul(transpose(n), matmul(c, n)), matmul(transpose(n), m))))
+
+    end function surface_moment
+
+    !
     !> Source term
+    !
+    !> With a free surface, every source comes with its mirror image (see add_source_value_3d). The
+    !> image is 2P - S, where S is the source and P the part of it that the traction-free surface
+    !> admits, so that on the surface row, where the source and its image coincide, they add up to
+    !> 2P on that half cell. A force is fully admitted (image = force); for a moment tensor P is
+    !> given by surface_moment.
     !
     subroutine add_source(t)
 
         integer, intent(in) :: t
 
-        integer :: sgx, sgy, sgz
-        real :: polar, azimuth, amp
         integer :: k, nbeg, nend
-        real :: m11, m12, m13, m22, m23, m33
-        integer :: irx, iry, irz
-        real :: dz_s
+        real :: polar, azimuth, amp, f
+        real :: dz0, col
         real :: rho_s(1:1)
+        real, dimension(6) :: m, mi
+        integer, dimension(6) :: block
+
+        block = [nx1_interior, nx2_interior, ny1_interior, ny2_interior, nz1_interior, nz2_interior]
 
         do k = 1, sgmtr%ns
 
+            associate (s => sgmtr%srcr(k))
+
+            ! Nominal (input) grid spacing in z, and the factor that turns the cell-height scaling
+            ! eta_dz_scaling = dz/eta_dz of the refined mesh into dz0/(physical cell height) in the
+            ! source column (the solver maps eta to depth by z = eta*(topo + depth_max)/eta_max)
             if (yn_free_surface) then
-                dz_s = eta_dz_i(sgmtr%srcr(k)%gz)*(topo_max + depth_max)/eta_max
+                dz0 = dz*(topo_max + depth_max)/eta_max
+                col = (topo_max + depth_max)/(topo_ixiy(s%gx, s%gy) + depth_max)
             else
-                dz_s = dz
+                dz0 = dz
+                col = 1.0
             end if
 
-            nbeg = nint(sgmtr%srcr(k)%t0/dt) + 1
-            nend = nbeg + sgmtr%srcr(k)%nt - 1
+            nbeg = nint(s%t0/dt) + 1
+            nend = nbeg + s%nt - 1
 
             if (t >= nbeg .and. t <= nend) then
 
-                amp = sgmtr%srcr(k)%stf(t - nbeg + 1)*sgmtr%srcr(k)%amp*dt
+                amp = s%stf(t - nbeg + 1)*s%amp*dt
 
-                select case (sgmtr%srcr(k)%mechanism)
+                select case (s%mechanism)
 
                     case ('force')
-                        ! Force vector
-                        polar = sgmtr%srcr(k)%polar
-                        azimuth = sgmtr%srcr(k)%azimuth
-
-                        sgx = sgmtr%srcr(k)%gx
-                        sgy = sgmtr%srcr(k)%gy
-                        sgz = sgmtr%srcr(k)%gz
+                        ! Force vector, added as a force density on a cell of the nominal size dx*dy*dz0,
+                        ! scaled on the refined mesh to the height of each cell, so that the total force
+                        ! is stf*dx*dy*dz0 at any depth
+                        polar = s%polar
+                        azimuth = s%azimuth
 
                         rho_s = 0
-                        if (is_in_block(sgx, sgy, sgz)) then
-                            rho_s = rho(sgx, sgy, sgz)
+                        if (is_in_block(s%gx, s%gy, s%gz)) then
+                            rho_s = rho(s%gx, s%gy, s%gz)
                         end if
                         call allreduce_array_group(rho_s)
-                        amp = amp/rho_s(1)
+                        f = amp*col/rho_s(1)
 
-                        sgx = sgmtr%srcr(k)%hx
-                        sgy = sgmtr%srcr(k)%gy
-                        sgz = sgmtr%srcr(k)%gz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    ! hx-iy-iz
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        vx_hxiyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            vx_hxiyiz(sgx + irx, sgy + iry, sgz + irz) + sin(polar)*cos(azimuth)*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        vy_hxiyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            vy_hxiyiz(sgx + irx, sgy + iry, sgz + irz) + sin(polar)*sin(azimuth)*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        vz_hxiyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            vz_hxiyiz(sgx + irx, sgy + iry, sgz + irz) + cos(polar)*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
+                        call add_source_value_3d(vx_hxiyiz, s%hx, s%gy, s%gz, s%interp_hx, s%interp_iy, s%interp_iz, &
+                            sin(polar)*cos(azimuth)*f, sin(polar)*cos(azimuth)*f, .false., yn_free_surface, block, eta_dz_scaling_i)
+                        call add_source_value_3d(vy_hxiyiz, s%hx, s%gy, s%gz, s%interp_hx, s%interp_iy, s%interp_iz, &
+                            sin(polar)*sin(azimuth)*f, sin(polar)*sin(azimuth)*f, .false., yn_free_surface, block, eta_dz_scaling_i)
+                        call add_source_value_3d(vz_hxiyiz, s%hx, s%gy, s%gz, s%interp_hx, s%interp_iy, s%interp_iz, &
+                            cos(polar)*f, cos(polar)*f, .false., yn_free_surface, block, eta_dz_scaling_i)
+                        call add_source_value_3d(vx_ixhyiz, s%gx, s%hy, s%gz, s%interp_ix, s%interp_hy, s%interp_iz, &
+                            sin(polar)*cos(azimuth)*f, sin(polar)*cos(azimuth)*f, .false., yn_free_surface, block, eta_dz_scaling_i)
+                        call add_source_value_3d(vy_ixhyiz, s%gx, s%hy, s%gz, s%interp_ix, s%interp_hy, s%interp_iz, &
+                            sin(polar)*sin(azimuth)*f, sin(polar)*sin(azimuth)*f, .false., yn_free_surface, block, eta_dz_scaling_i)
+                        call add_source_value_3d(vz_ixhyiz, s%gx, s%hy, s%gz, s%interp_ix, s%interp_hy, s%interp_iz, &
+                            cos(polar)*f, cos(polar)*f, .false., yn_free_surface, block, eta_dz_scaling_i)
+                        call add_source_value_3d(vx_ixiyhz, s%gx, s%gy, s%hz, s%interp_ix, s%interp_iy, s%interp_hz, &
+                            sin(polar)*cos(azimuth)*f, sin(polar)*cos(azimuth)*f, .true., yn_free_surface, block, eta_dz_scaling_h)
+                        call add_source_value_3d(vy_ixiyhz, s%gx, s%gy, s%hz, s%interp_ix, s%interp_iy, s%interp_hz, &
+                            sin(polar)*sin(azimuth)*f, sin(polar)*sin(azimuth)*f, .true., yn_free_surface, block, eta_dz_scaling_h)
+                        call add_source_value_3d(vz_ixiyhz, s%gx, s%gy, s%hz, s%interp_ix, s%interp_iy, s%interp_hz, &
+                            cos(polar)*f, cos(polar)*f, .true., yn_free_surface, block, eta_dz_scaling_h)
+                        call add_source_value_3d(vx_hxhyhz, s%hx, s%hy, s%hz, s%interp_hx, s%interp_hy, s%interp_hz, &
+                            sin(polar)*cos(azimuth)*f, sin(polar)*cos(azimuth)*f, .true., yn_free_surface, block, eta_dz_scaling_h)
+                        call add_source_value_3d(vy_hxhyhz, s%hx, s%hy, s%hz, s%interp_hx, s%interp_hy, s%interp_hz, &
+                            sin(polar)*sin(azimuth)*f, sin(polar)*sin(azimuth)*f, .true., yn_free_surface, block, eta_dz_scaling_h)
+                        call add_source_value_3d(vz_hxhyhz, s%hx, s%hy, s%hz, s%interp_hx, s%interp_hy, s%interp_hz, &
+                            cos(polar)*f, cos(polar)*f, .true., yn_free_surface, block, eta_dz_scaling_h)
 
-                        sgx = sgmtr%srcr(k)%gx
-                        sgy = sgmtr%srcr(k)%hy
-                        sgz = sgmtr%srcr(k)%gz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    ! ix-hy-iz
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        vx_ixhyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            vx_ixhyiz(sgx + irx, sgy + iry, sgz + irz) + sin(polar)*cos(azimuth)*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        vy_ixhyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            vy_ixhyiz(sgx + irx, sgy + iry, sgz + irz) + sin(polar)*sin(azimuth)*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        vz_ixhyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            vz_ixhyiz(sgx + irx, sgy + iry, sgz + irz) + cos(polar)*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
+                    case ('explosion', 'mt')
+                        ! Moment tensor (explosion: identity) added as stress drop,
+                        ! m = (mxx, myy, mzz, myz, mxz, mxy)
+                        if (s%mechanism == 'explosion') then
+                            m = [1.0, 1.0, 1.0, 0.0, 0.0, 0.0]
+                        else
+                            m = [s%moment_tensor(1, 1), s%moment_tensor(2, 2), s%moment_tensor(3, 3), &
+                                s%moment_tensor(2, 3), s%moment_tensor(1, 3), s%moment_tensor(1, 2)]
+                        end if
+                        ! Moment density on a cell of the nominal size dx*dy*dz0, scaled on the refined
+                        ! mesh to the height of each cell
+                        m = -amp*col/(dx*dy*dz0)*m
 
-                        sgx = sgmtr%srcr(k)%gx
-                        sgy = sgmtr%srcr(k)%gy
-                        sgz = sgmtr%srcr(k)%hz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    ! ix-iy-hz
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        vx_ixiyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            vx_ixiyhz(sgx + irx, sgy + iry, sgz + irz) + sin(polar)*cos(azimuth)*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                        vy_ixiyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            vy_ixiyhz(sgx + irx, sgy + iry, sgz + irz) + sin(polar)*sin(azimuth)*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                        vz_ixiyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            vz_ixiyhz(sgx + irx, sgy + iry, sgz + irz) + cos(polar)*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
+                        ! Image 2P - m, computed on the rank owning the surface point above the source
+                        mi = 0
+                        if (yn_free_surface) then
+                            if (is_in_block(s%gx, s%gy, 1)) then
+                                mi = 2.0*surface_moment(s%gx, s%gy, m) - m
+                            end if
+                            call allreduce_array_group(mi)
+                        end if
 
-                        sgx = sgmtr%srcr(k)%hx
-                        sgy = sgmtr%srcr(k)%hy
-                        sgz = sgmtr%srcr(k)%hz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    ! hx-hy-hz
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        vx_hxhyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            vx_hxhyhz(sgx + irx, sgy + iry, sgz + irz) + sin(polar)*cos(azimuth)*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                        vy_hxhyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            vy_hxhyhz(sgx + irx, sgy + iry, sgz + irz) + sin(polar)*sin(azimuth)*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                        vz_hxhyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            vz_hxhyhz(sgx + irx, sgy + iry, sgz + irz) + cos(polar)*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
-
-                    case ('explosion')
-                        ! Explosive source
-
-                        amp = amp/(dx*dy*dz_s)
-
-                        sgx = sgmtr%srcr(k)%gx
-                        sgy = sgmtr%srcr(k)%gy
-                        sgz = sgmtr%srcr(k)%gz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    ! ix-iy-iz
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        stressxx_ixiyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxx_ixiyiz(sgx + irx, sgy + iry, sgz + irz) - amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        stressyy_ixiyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressyy_ixiyiz(sgx + irx, sgy + iry, sgz + irz) - amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        stresszz_ixiyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stresszz_ixiyiz(sgx + irx, sgy + iry, sgz + irz) - amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
-
-                        sgx = sgmtr%srcr(k)%hx
-                        sgy = sgmtr%srcr(k)%hy
-                        sgz = sgmtr%srcr(k)%gz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    ! hx-hy-iz
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        stressxx_hxhyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxx_hxhyiz(sgx + irx, sgy + iry, sgz + irz) - amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        stressyy_hxhyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressyy_hxhyiz(sgx + irx, sgy + iry, sgz + irz) - amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        stresszz_hxhyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stresszz_hxhyiz(sgx + irx, sgy + iry, sgz + irz) - amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
-
-                        sgx = sgmtr%srcr(k)%hx
-                        sgy = sgmtr%srcr(k)%gy
-                        sgz = sgmtr%srcr(k)%hz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    ! hx-iy-hz
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        stressxx_hxiyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxx_hxiyhz(sgx + irx, sgy + iry, sgz + irz) - amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                        stressyy_hxiyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressyy_hxiyhz(sgx + irx, sgy + iry, sgz + irz) - amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                        stresszz_hxiyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stresszz_hxiyhz(sgx + irx, sgy + iry, sgz + irz) - amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
-
-                        sgx = sgmtr%srcr(k)%gx
-                        sgy = sgmtr%srcr(k)%hy
-                        sgz = sgmtr%srcr(k)%hz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    ! ix-hy-hz
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        stressxx_ixhyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxx_ixhyhz(sgx + irx, sgy + iry, sgz + irz) - amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                        stressyy_ixhyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressyy_ixhyhz(sgx + irx, sgy + iry, sgz + irz) - amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                        stresszz_ixhyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stresszz_ixhyhz(sgx + irx, sgy + iry, sgz + irz) - amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
-
-                    case ('mt')
-                        ! Moment tensor
-                        m11 = sgmtr%srcr(k)%moment_tensor(1, 1)
-                        m12 = sgmtr%srcr(k)%moment_tensor(1, 2)
-                        m13 = sgmtr%srcr(k)%moment_tensor(1, 3)
-                        m22 = sgmtr%srcr(k)%moment_tensor(2, 2)
-                        m23 = sgmtr%srcr(k)%moment_tensor(2, 3)
-                        m33 = sgmtr%srcr(k)%moment_tensor(3, 3)
-
-                        amp = amp/(dx*dy*dz_s)
-
-                        sgx = sgmtr%srcr(k)%gx
-                        sgy = sgmtr%srcr(k)%gy
-                        sgz = sgmtr%srcr(k)%gz
-
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    ! ix-iy-iz
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        stressxx_ixiyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxx_ixiyiz(sgx + irx, sgy + iry, sgz + irz) - m11*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        stressyy_ixiyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressyy_ixiyiz(sgx + irx, sgy + iry, sgz + irz) - m22*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        stresszz_ixiyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stresszz_ixiyiz(sgx + irx, sgy + iry, sgz + irz) - m33*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        stressxy_ixiyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxy_ixiyiz(sgx + irx, sgy + iry, sgz + irz) - m12*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        stressxz_ixiyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxz_ixiyiz(sgx + irx, sgy + iry, sgz + irz) - m13*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        stressyz_ixiyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressyz_ixiyiz(sgx + irx, sgy + iry, sgz + irz) - m23*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
-
-                        sgx = sgmtr%srcr(k)%hx
-                        sgy = sgmtr%srcr(k)%hy
-                        sgz = sgmtr%srcr(k)%gz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    ! hx-hy-iz
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        stressxx_hxhyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxx_hxhyiz(sgx + irx, sgy + iry, sgz + irz) - m11*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        stressyy_hxhyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressyy_hxhyiz(sgx + irx, sgy + iry, sgz + irz) - m22*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        stresszz_hxhyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stresszz_hxhyiz(sgx + irx, sgy + iry, sgz + irz) - m33*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        stressxy_hxhyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxy_hxhyiz(sgx + irx, sgy + iry, sgz + irz) - m12*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        stressxz_hxhyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxz_hxhyiz(sgx + irx, sgy + iry, sgz + irz) - m13*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        stressyz_hxhyiz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressyz_hxhyiz(sgx + irx, sgy + iry, sgz + irz) - m23*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
-
-                        sgx = sgmtr%srcr(k)%hx
-                        sgy = sgmtr%srcr(k)%gy
-                        sgz = sgmtr%srcr(k)%hz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    ! hx-iy-hz
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        stressxx_hxiyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxx_hxiyhz(sgx + irx, sgy + iry, sgz + irz) - m11*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                        stressyy_hxiyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressyy_hxiyhz(sgx + irx, sgy + iry, sgz + irz) - m22*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                        stresszz_hxiyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stresszz_hxiyhz(sgx + irx, sgy + iry, sgz + irz) - m33*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                        stressxy_hxiyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxy_hxiyhz(sgx + irx, sgy + iry, sgz + irz) - m12*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                        stressxz_hxiyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxz_hxiyhz(sgx + irx, sgy + iry, sgz + irz) - m13*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                        stressyz_hxiyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressyz_hxiyhz(sgx + irx, sgy + iry, sgz + irz) - m23*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
-
-                        sgx = sgmtr%srcr(k)%gx
-                        sgy = sgmtr%srcr(k)%hy
-                        sgz = sgmtr%srcr(k)%hz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    ! ix-hy-hz
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        stressxx_ixhyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxx_ixhyhz(sgx + irx, sgy + iry, sgz + irz) - m11*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                        stressyy_ixhyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressyy_ixhyhz(sgx + irx, sgy + iry, sgz + irz) - m22*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                        stresszz_ixhyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stresszz_ixhyhz(sgx + irx, sgy + iry, sgz + irz) - m33*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                        stressxy_ixhyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxy_ixhyhz(sgx + irx, sgy + iry, sgz + irz) - m12*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                        stressxz_ixhyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxz_ixhyhz(sgx + irx, sgy + iry, sgz + irz) - m13*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                        stressyz_ixhyhz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressyz_ixhyhz(sgx + irx, sgy + iry, sgz + irz) - m23*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
+                        call add_source_value_3d(stressxx_ixiyiz, s%gx, s%gy, s%gz, s%interp_ix, s%interp_iy, s%interp_iz, &
+                            m(1), mi(1), .false., yn_free_surface, block, eta_dz_scaling_i)
+                        call add_source_value_3d(stressyy_ixiyiz, s%gx, s%gy, s%gz, s%interp_ix, s%interp_iy, s%interp_iz, &
+                            m(2), mi(2), .false., yn_free_surface, block, eta_dz_scaling_i)
+                        call add_source_value_3d(stresszz_ixiyiz, s%gx, s%gy, s%gz, s%interp_ix, s%interp_iy, s%interp_iz, &
+                            m(3), mi(3), .false., yn_free_surface, block, eta_dz_scaling_i)
+                        call add_source_value_3d(stressyz_ixiyiz, s%gx, s%gy, s%gz, s%interp_ix, s%interp_iy, s%interp_iz, &
+                            m(4), mi(4), .false., yn_free_surface, block, eta_dz_scaling_i)
+                        call add_source_value_3d(stressxz_ixiyiz, s%gx, s%gy, s%gz, s%interp_ix, s%interp_iy, s%interp_iz, &
+                            m(5), mi(5), .false., yn_free_surface, block, eta_dz_scaling_i)
+                        call add_source_value_3d(stressxy_ixiyiz, s%gx, s%gy, s%gz, s%interp_ix, s%interp_iy, s%interp_iz, &
+                            m(6), mi(6), .false., yn_free_surface, block, eta_dz_scaling_i)
+                        call add_source_value_3d(stressxx_hxhyiz, s%hx, s%hy, s%gz, s%interp_hx, s%interp_hy, s%interp_iz, &
+                            m(1), mi(1), .false., yn_free_surface, block, eta_dz_scaling_i)
+                        call add_source_value_3d(stressyy_hxhyiz, s%hx, s%hy, s%gz, s%interp_hx, s%interp_hy, s%interp_iz, &
+                            m(2), mi(2), .false., yn_free_surface, block, eta_dz_scaling_i)
+                        call add_source_value_3d(stresszz_hxhyiz, s%hx, s%hy, s%gz, s%interp_hx, s%interp_hy, s%interp_iz, &
+                            m(3), mi(3), .false., yn_free_surface, block, eta_dz_scaling_i)
+                        call add_source_value_3d(stressyz_hxhyiz, s%hx, s%hy, s%gz, s%interp_hx, s%interp_hy, s%interp_iz, &
+                            m(4), mi(4), .false., yn_free_surface, block, eta_dz_scaling_i)
+                        call add_source_value_3d(stressxz_hxhyiz, s%hx, s%hy, s%gz, s%interp_hx, s%interp_hy, s%interp_iz, &
+                            m(5), mi(5), .false., yn_free_surface, block, eta_dz_scaling_i)
+                        call add_source_value_3d(stressxy_hxhyiz, s%hx, s%hy, s%gz, s%interp_hx, s%interp_hy, s%interp_iz, &
+                            m(6), mi(6), .false., yn_free_surface, block, eta_dz_scaling_i)
+                        call add_source_value_3d(stressxx_hxiyhz, s%hx, s%gy, s%hz, s%interp_hx, s%interp_iy, s%interp_hz, &
+                            m(1), mi(1), .true., yn_free_surface, block, eta_dz_scaling_h)
+                        call add_source_value_3d(stressyy_hxiyhz, s%hx, s%gy, s%hz, s%interp_hx, s%interp_iy, s%interp_hz, &
+                            m(2), mi(2), .true., yn_free_surface, block, eta_dz_scaling_h)
+                        call add_source_value_3d(stresszz_hxiyhz, s%hx, s%gy, s%hz, s%interp_hx, s%interp_iy, s%interp_hz, &
+                            m(3), mi(3), .true., yn_free_surface, block, eta_dz_scaling_h)
+                        call add_source_value_3d(stressyz_hxiyhz, s%hx, s%gy, s%hz, s%interp_hx, s%interp_iy, s%interp_hz, &
+                            m(4), mi(4), .true., yn_free_surface, block, eta_dz_scaling_h)
+                        call add_source_value_3d(stressxz_hxiyhz, s%hx, s%gy, s%hz, s%interp_hx, s%interp_iy, s%interp_hz, &
+                            m(5), mi(5), .true., yn_free_surface, block, eta_dz_scaling_h)
+                        call add_source_value_3d(stressxy_hxiyhz, s%hx, s%gy, s%hz, s%interp_hx, s%interp_iy, s%interp_hz, &
+                            m(6), mi(6), .true., yn_free_surface, block, eta_dz_scaling_h)
+                        call add_source_value_3d(stressxx_ixhyhz, s%gx, s%hy, s%hz, s%interp_ix, s%interp_hy, s%interp_hz, &
+                            m(1), mi(1), .true., yn_free_surface, block, eta_dz_scaling_h)
+                        call add_source_value_3d(stressyy_ixhyhz, s%gx, s%hy, s%hz, s%interp_ix, s%interp_hy, s%interp_hz, &
+                            m(2), mi(2), .true., yn_free_surface, block, eta_dz_scaling_h)
+                        call add_source_value_3d(stresszz_ixhyhz, s%gx, s%hy, s%hz, s%interp_ix, s%interp_hy, s%interp_hz, &
+                            m(3), mi(3), .true., yn_free_surface, block, eta_dz_scaling_h)
+                        call add_source_value_3d(stressyz_ixhyhz, s%gx, s%hy, s%hz, s%interp_ix, s%interp_hy, s%interp_hz, &
+                            m(4), mi(4), .true., yn_free_surface, block, eta_dz_scaling_h)
+                        call add_source_value_3d(stressxz_ixhyhz, s%gx, s%hy, s%hz, s%interp_ix, s%interp_hy, s%interp_hz, &
+                            m(5), mi(5), .true., yn_free_surface, block, eta_dz_scaling_h)
+                        call add_source_value_3d(stressxy_ixhyhz, s%gx, s%hy, s%hz, s%interp_ix, s%interp_hy, s%interp_hz, &
+                            m(6), mi(6), .true., yn_free_surface, block, eta_dz_scaling_h)
 
                 end select
+
             end if
+
+            end associate
+
         end do
 
-    end subroutine
+    end subroutine add_source
 
 end module

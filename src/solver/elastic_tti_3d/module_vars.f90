@@ -1,5 +1,5 @@
 !
-! © 2025. Triad National Security, LLC. All rights reserved.
+! © 2025-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -24,7 +24,7 @@ module elastic_tti_3d_vars
     use mod_su
     use mod_source_receiver, only: source_receiver_geometry
     use mod_utility, only: check_dt_f0
-    use mod_source_receiver, only : nkw
+    use mod_source_receiver, only: nkw, add_source_value_3d, source_value_3d
     use mod_anisotropy, only: thomsen_to_cij, alkhalifah_tsvankin_to_cij, min_max_phase_velocity_3d
     use mpi_f08
 
@@ -1209,11 +1209,9 @@ contains
             sgmtr%srcr(:)%z = (sgmtr%srcr(:)%z - stp)/(-stp + depth_max)*eta_max
             sgmtr%recr(:)%z = (sgmtr%recr(:)%z - rtp)/(-rtp + depth_max)*eta_max
 
-            ! Avoid placing source on the free surface as otherwise the resulting amplitude
-            ! can be problematic
-            where (sgmtr%srcr(:)%z < eta_dz_i(1))
-                sgmtr%srcr(:)%z = eta_dz_i(1)
-                sgmtr%srcr(:)%amp = sgmtr%srcr(:)%amp*1.2
+            ! A source cannot be above the free surface (eta < 0); one given above it is placed on it
+            where (sgmtr%srcr(:)%z < 0.0)
+                sgmtr%srcr(:)%z = 0.0
             end where
 
             call alloc_array(sgmtr%z_i, [1, nx, 1, ny, 1, nz], pad=pml + 1)

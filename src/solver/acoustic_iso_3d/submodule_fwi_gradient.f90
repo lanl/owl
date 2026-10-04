@@ -34,7 +34,9 @@ contains
 
         class(wave_solver_acoustic_iso_3d), intent(inout) :: this
 
-        integer :: l, i, j, k, ir, irx, iry, irz, rgx, rgy, rgz, t
+        integer :: l, i, j, k, ir, t
+        integer, dimension(6) :: block
+        real :: amp
         type(grid3) :: grd
         logical :: wnan
         real :: wmin, wmax
@@ -168,36 +170,18 @@ contains
                 end if
             end if
 
-            ! Read and add adjoint source; each block adds only to the stencil points it holds
-            !$omp parallel private(ir, irx, iry, irz, rgx, rgy, rgz)
+            ! Add the adjoint sources: the data residuals as pressure sources at the receivers,
+            ! with their mirror images under a free surface (p is odd about the surface), the
+            ! transpose of the receiver sampling; each block adds only to the points it owns
+            block = [nx1_interior, nx2_interior, ny1_interior, ny2_interior, nz1_interior, nz2_interior]
             do ir = 1, sgmtr%nr
                 if (sgmtr%recr(ir)%weight /= 0) then
-
-                    rgx = sgmtr%recr(ir)%gx
-                    rgy = sgmtr%recr(ir)%gy
-                    rgz = sgmtr%recr(ir)%gz
-
-                    !$omp do collapse(3)
-                    do irz = -nkw, nkw
-                        do iry = -nkw, nkw
-                            do irx = -nkw, nkw
-                                if (is_in_block(rgx + irx, rgy + iry, rgz + irz)) then
-                                    pr(rgx + irx, rgy + iry, rgz + irz) = &
-                                        pr(rgx + irx, rgy + iry, rgz + irz) &
-                                        + this%seis_pr%trace(ir)%data(t) &
-                                        *sgmtr%recr(ir)%interp_ix(irx) &
-                                        *sgmtr%recr(ir)%interp_iy(iry) &
-                                        *sgmtr%recr(ir)%interp_iz(irz) &
-                                        *sgmtr%recr(ir)%weight
-                                end if
-                            end do
-                        end do
-                    end do
-                    !$omp end do
-
+                    amp = this%seis_pr%trace(ir)%data(t)*sgmtr%recr(ir)%weight
+                    call add_source_value_3d(pr, sgmtr%recr(ir)%gx, sgmtr%recr(ir)%gy, sgmtr%recr(ir)%gz, &
+                        sgmtr%recr(ir)%interp_ix, sgmtr%recr(ir)%interp_iy, sgmtr%recr(ir)%interp_iz, &
+                        amp, -amp, .false., yn_free_surface, block)
                 end if
             end do
-            !$omp end parallel
 
             ! Compute gradients
             if (mod(t, cc_step_interval) == 0) then
@@ -256,12 +240,13 @@ contains
 
             energy_src_v = energy_src_v + 1.0e-3*maxval(energy_src_v)
             energy_rec_v = energy_rec_v + 1.0e-3*maxval(energy_rec_v)
-            energy_src_v = sqrt(energy_src_v*energy_rec_v)
+            ! The product of two small energies can underflow in single precision
+            energy_src_v = sqrt(energy_src_v)*sqrt(energy_rec_v)
             grad_vp = grad_vp/energy_src_v
 
             energy_src_a = energy_src_a + 1.0e-3*maxval(energy_src_a)
             energy_rec_a = energy_rec_a + 1.0e-3*maxval(energy_rec_a)
-            energy_src_a = sqrt(energy_src_a*energy_rec_a)
+            energy_src_a = sqrt(energy_src_a)*sqrt(energy_rec_a)
             grad_rho = grad_rho/energy_src_a
 
         end if
@@ -361,7 +346,7 @@ contains
                         energy_src_a(i, j, k) = energy_src_a(i, j, k) &
                             + src_vx(i, j, k)**2 + src_vy(i, j, k)**2 + src_vz(i, j, k)**2
                         energy_rec_a(i, j, k) = energy_rec_a(i, j, k) &
-                            + rec_vx(i, j, k)**2 + src_vy(i, j, k)**2 + rec_vz(i, j, k)**2
+                            + rec_vx(i, j, k)**2 + rec_vy(i, j, k)**2 + rec_vz(i, j, k)**2
                     end do
                 end do
             end do

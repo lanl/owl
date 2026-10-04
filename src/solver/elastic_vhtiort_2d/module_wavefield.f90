@@ -1,5 +1,5 @@
 !
-! © 2025. Triad National Security, LLC. All rights reserved.
+! © 2025-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -155,11 +155,14 @@ contains
         real :: pdxvx, pdzvx, pdxvz, pdzvz
         real :: pdxxx, pdzxz, pdxxz, pdzzz
 
-        ! Set the particle velocity components to zero above the free surface
+        ! Mirror the particle velocities above the free surface, v(-z) = v(z). The z-derivative
+        ! stencils of the stress update read up to fdhalf rows above the surface; zeros there make
+        ! the velocities discontinuous at the surface, an error that does not vanish with grid
+        ! refinement (surface amplitudes 6-8% too low), while the mirrored values keep them continuous.
         !$omp parallel do private(j) schedule(auto)
         do j = 1, fdhalf
-            vx(:, 1 - j) = 0.0
-            vz(:, 2 - j) = 0.0
+            vx(:, 1 - j) = vx(:, 1 + j)
+            vz(:, 2 - j) = vz(:, 1 + j)
         end do
         !$omp end parallel do
 
@@ -231,13 +234,6 @@ contains
             ! At the free surface, normal stress is strictly zero
             stresszz(:, 1) = 0.0
 
-            ! The following is redundant because there is no ∂σxx/∂z; however, it is necessary to
-            ! correctly simulate near-surface explosion source term based on the method of Hicks (2002)
-            ! In the method, the weight above the free surface need to be subtracted from the
-            ! mirror weights below the near surface. This is equivalent to using the original weights,
-            ! but set sigmaxx to mirror negative above the free surface.
-            stressxx(:, 1 - j) = -stressxx(:, 1 + j)
-
             ! The shear stress is mirror-symmetric w.r.t. the free surface
             stressxz(:, 2 - j) = -stressxz(:, 1 + j)
 
@@ -291,23 +287,24 @@ contains
     !
     !> Add source
     !
+    !> With a free surface, every source comes with its mirror image (see add_source_value_2d). The
+    !> image is 2P - S, where S is the source and P the part of it that a traction-free surface
+    !> admits, so that on the surface row, where the source and its image coincide, they add up to
+    !> 2P on that half cell. A force is fully admitted (image = force). A moment tensor loses its
+    !> traction components Mzz and Mxz: sigma_zz = 0 at the surface gives
+    !> eps_zz = (Mzz - c13*eps_xx)/c33, which turns Mzz into the horizontal moment -(c13/c33)*Mzz,
+    !> so P = (Mxx - c13/c33*Mzz, 0, 0) and the images are Mxx - 2*c13/c33*Mzz, -Mzz and -Mxz.
+    !
     subroutine add_source(t)
 
         integer, intent(in) :: t
 
         integer :: k
         integer :: nbeg, nend
-        integer :: irx, irz, sgx, sgz, shx, shz
-        real :: amp, polar
-        real :: dz_s
+        integer :: sgx, sgz, shx, shz
+        real :: amp, polar, mxx, mzz, mxz, r13
 
         do k = 1, sgmtr%ns
-
-            if (yn_free_surface) then
-                dz_s = dz_i(sgmtr%srcr(k)%gz)
-            else
-                dz_s = dz
-            end if
 
             nbeg = nint(sgmtr%srcr(k)%t0/dt) + 1
             nend = nbeg + sgmtr%srcr(k)%nt - 1
@@ -321,82 +318,49 @@ contains
 
                 amp = sgmtr%srcr(k)%stf(t - nbeg + 1)*sgmtr%srcr(k)%amp*dt
 
-                select case (sgmtr%srcr(k)%mechanism)
+                associate (s => sgmtr%srcr(k))
+
+                select case (s%mechanism)
 
                     case ('force')
-                        ! Force vector
-                        polar = sgmtr%srcr(k)%polar
+                        ! Force vector, added as a force density on a cell of the nominal size dx*dz,
+                        ! scaled on the refined mesh to the height of each cell (dz_scaling), so that
+                        ! the total force is stf*dx*dz at any depth
+                        polar = s%polar
+                        call add_source_value_2d(vx, shx, sgz, s%interp_hx, s%interp_iz, &
+                            sin(polar)*amp/rho(shx, sgz), sin(polar)*amp/rho(shx, sgz), .false., yn_free_surface, &
+                            dz_scaling_i)
+                        call add_source_value_2d(vz, sgx, shz, s%interp_ix, s%interp_hz, &
+                            cos(polar)*amp/rho(sgx, shz), cos(polar)*amp/rho(sgx, shz), .true., yn_free_surface, &
+                            dz_scaling_h)
 
-                        !$omp parallel do private(irx, irz) collapse(2) schedule(auto)
-                        do irz = -nkw, nkw
-                            do irx = -nkw, nkw
-                                if (ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                    vx(shx + irx, sgz + irz) = &
-                                        vx(shx + irx, sgz + irz) + sin(polar)*amp/rho(shx, sgz) &
-                                        *sgmtr%srcr(k)%interp_hx(irx) &
-                                        *sgmtr%srcr(k)%interp_iz(irz)
-                                end if
-                                if (ifelse(yn_free_surface, shz + irz >= 2, .true.)) then
-                                    vz(sgx + irx, shz + irz) = &
-                                        vz(sgx + irx, shz + irz) + cos(polar)*amp/rho(sgx, shz) &
-                                        *sgmtr%srcr(k)%interp_ix(irx) &
-                                        *sgmtr%srcr(k)%interp_hz(irz)
-                                end if
-                            end do
-                        end do
-                        !$omp end parallel do
-
-                    case ('explosion')
-                        ! Explosive source implicitly via moment tensor as stress drop
-
-                        amp = amp/(dx*dz_s)
-
-                        !$omp parallel do private(irx, irz) collapse(2) schedule(auto)
-                        do irz = -nkw, nkw
-                            do irx = -nkw, nkw
-                                if (ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                    stressxx(sgx + irx, sgz + irz) = &
-                                        stressxx(sgx + irx, sgz + irz) - amp &
-                                        *sgmtr%srcr(k)%interp_ix(irx) &
-                                        *sgmtr%srcr(k)%interp_iz(irz)
-                                    stresszz(sgx + irx, sgz + irz) = &
-                                        stresszz(sgx + irx, sgz + irz) - amp &
-                                        *sgmtr%srcr(k)%interp_ix(irx) &
-                                        *sgmtr%srcr(k)%interp_iz(irz)
-                                end if
-                            end do
-                        end do
-                        !$omp end parallel do
-
-                    case ('mt')
-                        ! Moment tensor added as stress drop
-
-                        amp = amp/(dx*dz_s)
-
-                        !$omp parallel do private(irx, irz) collapse(2) schedule(auto)
-                        do irz = -nkw, nkw
-                            do irx = -nkw, nkw
-                                if (ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                    stressxx(sgx + irx, sgz + irz) = &
-                                        stressxx(sgx + irx, sgz + irz) - amp*sgmtr%srcr(k)%moment_tensor(1, 1) &
-                                        *sgmtr%srcr(k)%interp_ix(irx) &
-                                        *sgmtr%srcr(k)%interp_iz(irz)
-                                    stresszz(sgx + irx, sgz + irz) = &
-                                        stresszz(sgx + irx, sgz + irz) - amp*sgmtr%srcr(k)%moment_tensor(3, 3) &
-                                        *sgmtr%srcr(k)%interp_ix(irx) &
-                                        *sgmtr%srcr(k)%interp_iz(irz)
-                                end if
-                                if (ifelse(yn_free_surface, shz + irz >= 2, .true.)) then
-                                    stressxz(shx + irx, shz + irz) = &
-                                        stressxz(shx + irx, shz + irz) - amp*sgmtr%srcr(k)%moment_tensor(1, 3) &
-                                        *sgmtr%srcr(k)%interp_hx(irx) &
-                                        *sgmtr%srcr(k)%interp_hz(irz)
-                                end if
-                            end do
-                        end do
-                        !$omp end parallel do
+                    case ('explosion', 'mt')
+                        ! Moment tensor (explosion: identity) added as stress drop
+                        if (s%mechanism == 'explosion') then
+                            mxx = 1.0
+                            mzz = 1.0
+                            mxz = 0.0
+                        else
+                            mxx = s%moment_tensor(1, 1)
+                            mzz = s%moment_tensor(3, 3)
+                            mxz = s%moment_tensor(1, 3)
+                        end if
+                        ! Moment density on a cell of the nominal size dx*dz, scaled on the refined mesh
+                        ! to the height of each cell (dz_scaling)
+                        amp = amp/(dx*dz)
+                        ! Free-surface conversion ratio c13/c33 at the surface above the source
+                        r13 = c13(sgx, 1)/c33(sgx, 1)
+                        call add_source_value_2d(stressxx, sgx, sgz, s%interp_ix, s%interp_iz, &
+                            -amp*mxx, -amp*(mxx - 2.0*r13*mzz), .false., yn_free_surface, dz_scaling_i)
+                        call add_source_value_2d(stresszz, sgx, sgz, s%interp_ix, s%interp_iz, &
+                            -amp*mzz, amp*mzz, .false., yn_free_surface, dz_scaling_i)
+                        call add_source_value_2d(stressxz, shx, shz, s%interp_hx, s%interp_hz, &
+                            -amp*mxz, amp*mxz, .true., yn_free_surface, dz_scaling_h)
 
                 end select
+
+                end associate
+
             end if
         end do
 

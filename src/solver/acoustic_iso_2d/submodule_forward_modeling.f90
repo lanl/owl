@@ -1,5 +1,5 @@
 !
-! © 2025. Triad National Security, LLC. All rights reserved.
+! © 2025-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -32,7 +32,8 @@ contains
 
         class(wave_solver_acoustic_iso_2d), intent(inout) :: this
 
-        integer :: l, ir, irx, irz, rgx, rgz, t
+        integer :: l, ir, irx, irz, rgx, rgz, kr, t
+        real :: sr
 
         call prepare_modeling(this)
         call compute_cfspml_damping_coef
@@ -55,7 +56,10 @@ contains
                 end if
             end if
 
-            !$omp parallel do private(ir, irx, irz, rgx, rgz)
+            ! Record seismogram. With a free surface (p = 0 on row 1), the interpolation points
+            ! above it take the pressure mirrored about it, p(1 - k) = -p(1 + k), read from the
+            ! rows below the surface (the rows above it are refreshed only once per time step)
+            !$omp parallel do private(ir, irx, irz, rgx, rgz, kr, sr)
             do ir = 1, sgmtr%nr
 
                 if (sgmtr%recr(ir)%weight /= 0) then
@@ -64,10 +68,16 @@ contains
                     rgz = sgmtr%recr(ir)%gz
 
                     do irz = -nkw, nkw
+                        kr = rgz + irz
+                        sr = 1.0
+                        if (yn_free_surface .and. kr < 1) then
+                            kr = 2 - kr
+                            sr = -1.0
+                        end if
                         do irx = -nkw, nkw
                             this%seis_p%trace(ir)%data(t) = &
                                 this%seis_p%trace(ir)%data(t) + &
-                                p(rgx + irx, rgz + irz) &
+                                sr*p(rgx + irx, kr) &
                                 *sgmtr%recr(ir)%interp_ix(irx) &
                                 *sgmtr%recr(ir)%interp_iz(irz) &
                                 *sgmtr%recr(ir)%weight

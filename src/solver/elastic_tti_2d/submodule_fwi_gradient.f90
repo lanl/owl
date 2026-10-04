@@ -36,10 +36,10 @@ contains
 
         class(wave_solver_elastic_tti_2d), intent(inout) :: this
 
-        integer :: l, ir, irx, irz, rgx, rgz
+        integer :: l, ir
         type(grid2) :: grd
         integer :: i, j, t
-        real :: amp1, amp2
+        real :: amp1, amp2, col
 
         call prepare_modeling(this)
         call compute_cfspml_damping_coef
@@ -345,50 +345,31 @@ contains
                     memory_pdzzzr_ixhz)
             end if
 
-            ! Read and add adjoint source
-            !$omp parallel private(ir, irx, irz, rgx, rgz, amp1, amp2)
+            ! Add the adjoint sources: the data residuals as forces at the receivers on both velocity
+            ! sets (the receivers average the two sets), injected as a force source (add_source: mirror
+            ! images under a free surface, cell-height scaling on the refined mesh), which makes them
+            ! the adjoint of the receiver sampling. Adjacent receivers may add to the same grid points,
+            ! hence the serial loop.
             do ir = 1, sgmtr%nr
                 if (sgmtr%recr(ir)%weight /= 0) then
-
-                    rgx = sgmtr%recr(ir)%hx
-                    rgz = sgmtr%recr(ir)%gz
-                    !$omp do collapse(2)
-                    do irz = -nkw, nkw
-                        do irx = -nkw, nkw
-                            if (ifelse(yn_free_surface, rgz + irz >= 2, .true.)) then
-                                amp1 = sgmtr%recr(ir)%interp_hx(irx) &
-                                    *sgmtr%recr(ir)%interp_iz(irz) &
-                                    *sgmtr%recr(ir)%weight*0.5
-                                vxr_hxiz(rgx + irx, rgz + irz) = vxr_hxiz(rgx + irx, rgz + irz) &
-                                    + this%seis_vxr%trace(ir)%data(t)*amp1
-                                vzr_hxiz(rgx + irx, rgz + irz) = vzr_hxiz(rgx + irx, rgz + irz) &
-                                    + this%seis_vzr%trace(ir)%data(t)*amp1
-                            end if
-                        end do
-                    end do
-                    !$omp end do
-
-                    rgx = sgmtr%recr(ir)%gx
-                    rgz = sgmtr%recr(ir)%hz
-                    !$omp do collapse(2)
-                    do irz = -nkw, nkw
-                        do irx = -nkw, nkw
-                            if (ifelse(yn_free_surface, rgz + irz >= 2, .true.)) then
-                                amp2 = sgmtr%recr(ir)%interp_ix(irx) &
-                                    *sgmtr%recr(ir)%interp_hz(irz) &
-                                    *sgmtr%recr(ir)%weight*0.5
-                                vxr_ixhz(rgx + irx, rgz + irz) = vxr_ixhz(rgx + irx, rgz + irz) &
-                                    + this%seis_vxr%trace(ir)%data(t)*amp2
-                                vzr_ixhz(rgx + irx, rgz + irz) = vzr_ixhz(rgx + irx, rgz + irz) &
-                                    + this%seis_vzr%trace(ir)%data(t)*amp2
-                            end if
-                        end do
-                    end do
-                    !$omp end do
-
+                    associate (r => sgmtr%recr(ir))
+                    col = 1.0
+                    if (yn_free_surface) then
+                        col = (topo_max + depth_max)/(topo_i(r%gx) + depth_max)
+                    end if
+                    amp1 = this%seis_vxr%trace(ir)%data(t)*r%weight*0.5*col
+                    amp2 = this%seis_vzr%trace(ir)%data(t)*r%weight*0.5*col
+                    call add_source_value_2d(vxr_hxiz, r%hx, r%gz, r%interp_hx, r%interp_iz, amp1, amp1, .false., &
+                        yn_free_surface, eta_dz_scaling_i)
+                    call add_source_value_2d(vzr_hxiz, r%hx, r%gz, r%interp_hx, r%interp_iz, amp2, amp2, .false., &
+                        yn_free_surface, eta_dz_scaling_i)
+                    call add_source_value_2d(vxr_ixhz, r%gx, r%hz, r%interp_ix, r%interp_hz, amp1, amp1, .true., &
+                        yn_free_surface, eta_dz_scaling_h)
+                    call add_source_value_2d(vzr_ixhz, r%gx, r%hz, r%interp_ix, r%interp_hz, amp2, amp2, .true., &
+                        yn_free_surface, eta_dz_scaling_h)
+                    end associate
                 end if
             end do
-            !$omp end parallel
 
             ! Compute gradients
             if (mod(t, cc_step_interval) == 0) then
@@ -437,7 +418,8 @@ contains
 
             energy_src_v = energy_src_v + 1.0e-3*maxval(energy_src_v)
             energy_rec_v = energy_rec_v + 1.0e-3*maxval(energy_rec_v)
-            energy_src_v = sqrt(energy_src_v*energy_rec_v)
+            ! The product of two small energies can underflow in single precision
+            energy_src_v = sqrt(energy_src_v)*sqrt(energy_rec_v)
             grad_c11 = grad_c11/energy_src_v
             grad_c13 = grad_c13/energy_src_v
             grad_c15 = grad_c15/energy_src_v
@@ -447,7 +429,7 @@ contains
 
             energy_src_a = energy_src_a + 1.0e-3*maxval(energy_src_a)
             energy_rec_a = energy_rec_a + 1.0e-3*maxval(energy_rec_a)
-            energy_src_a = sqrt(energy_src_a*energy_rec_a)
+            energy_src_a = sqrt(energy_src_a)*sqrt(energy_rec_a)
             grad_rho = grad_rho/energy_src_a
 
         end if
@@ -727,59 +709,59 @@ contains
     end subroutine
 
     !
-    !> Compute source parameter gradients
+    !> Compute source parameter gradients: the transpose of the moment-tensor injection of add_source.
+    !> add_source adds m = (mxx, mzz, mxz), scaled, at the source points (sums v1 below) of both stress
+    !> sets and, with a free surface, its image 2*surface_moment(m) - m = b m at the mirror points
+    !> (sums v2), so the gradient with respect to m is v1 + b^T v2.
     !
     subroutine compute_gradient_source(t)
 
         integer, intent(in) :: t
 
-        integer :: sgx, sgz, i, irx, irz
+        integer :: i, d
+        real :: col
+        real, dimension(3) :: v1, v2, g, e
+        real, dimension(3, 3) :: b
+        real, dimension(2) :: vxx, vzz, vxz
 
         do i = 1, sgmtr%ns
 
-            ! ix-iz
-            sgx = sgmtr%srcr(i)%gx
-            sgz = sgmtr%srcr(i)%gz
-            do irz = -nkw, nkw
-                do irx = -nkw, nkw
-                    if (ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                        grad_mt(1) = grad_mt(1) - &
-                            stressxxr_ixiz(sgx + irx, sgz + irz) &
-                            *sgmtr%srcr(i)%interp_ix(irx) &
-                            *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
-                        grad_mt(3) = grad_mt(3) - &
-                            stresszzr_ixiz(sgx + irx, sgz + irz) &
-                            *sgmtr%srcr(i)%interp_ix(irx) &
-                            *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
-                        grad_mt(5) = grad_mt(5) - &
-                            stressxzr_ixiz(sgx + irx, sgz + irz) &
-                            *sgmtr%srcr(i)%interp_ix(irx) &
-                            *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
-                    end if
-                end do
-            end do
+            associate (s => sgmtr%srcr(i))
 
-            ! hx-hz
-            sgx = sgmtr%srcr(i)%hx
-            sgz = sgmtr%srcr(i)%hz
-            do irz = -nkw, nkw
-                do irx = -nkw, nkw
-                    if (ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                        grad_mt(1) = grad_mt(1) - &
-                            stressxxr_hxhz(sgx + irx, sgz + irz) &
-                            *sgmtr%srcr(i)%interp_hx(irx) &
-                            *sgmtr%srcr(i)%interp_hz(irz)*dstf_dt(t, i)
-                        grad_mt(3) = grad_mt(3) - &
-                            stresszzr_hxhz(sgx + irx, sgz + irz) &
-                            *sgmtr%srcr(i)%interp_hx(irx) &
-                            *sgmtr%srcr(i)%interp_hz(irz)*dstf_dt(t, i)
-                        grad_mt(5) = grad_mt(5) - &
-                            stressxzr_hxhz(sgx + irx, sgz + irz) &
-                            *sgmtr%srcr(i)%interp_hx(irx) &
-                            *sgmtr%srcr(i)%interp_hz(irz)*dstf_dt(t, i)
-                    end if
+            ! Images of the unit moment tensors (columns of b)
+            b = 0
+            if (yn_free_surface) then
+                do d = 1, 3
+                    e = 0
+                    e(d) = 1.0
+                    b(:, d) = 2.0*surface_moment(s%gx, e) - e
                 end do
-            end do
+            end if
+
+            vxx = source_value_2d(stressxxr_ixiz, s%gx, s%gz, s%interp_ix, s%interp_iz, .false., yn_free_surface, &
+                eta_dz_scaling_i) + source_value_2d(stressxxr_hxhz, s%hx, s%hz, s%interp_hx, s%interp_hz, .true., &
+                yn_free_surface, eta_dz_scaling_h)
+            vzz = source_value_2d(stresszzr_ixiz, s%gx, s%gz, s%interp_ix, s%interp_iz, .false., yn_free_surface, &
+                eta_dz_scaling_i) + source_value_2d(stresszzr_hxhz, s%hx, s%hz, s%interp_hx, s%interp_hz, .true., &
+                yn_free_surface, eta_dz_scaling_h)
+            vxz = source_value_2d(stressxzr_ixiz, s%gx, s%gz, s%interp_ix, s%interp_iz, .false., yn_free_surface, &
+                eta_dz_scaling_i) + source_value_2d(stressxzr_hxhz, s%hx, s%hz, s%interp_hx, s%interp_hz, .true., &
+                yn_free_surface, eta_dz_scaling_h)
+            v1 = [vxx(1), vzz(1), vxz(1)]
+            v2 = [vxx(2), vzz(2), vxz(2)]
+            ! Per-source factor of the moment density in add_source; the nominal cell size, common
+            ! to all sources, is left out
+            col = 1.0
+            if (yn_free_surface) then
+                col = (topo_max + depth_max)/(topo_i(s%gx) + depth_max)
+            end if
+            g = col*(v1 + matmul(transpose(b), v2))
+
+            grad_mt(1) = grad_mt(1) - g(1)*dstf_dt(t, i)
+            grad_mt(3) = grad_mt(3) - g(2)*dstf_dt(t, i)
+            grad_mt(5) = grad_mt(5) - g(3)*dstf_dt(t, i)
+
+            end associate
 
         end do
 

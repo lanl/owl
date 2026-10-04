@@ -1,5 +1,5 @@
 !
-! © 2025. Triad National Security, LLC. All rights reserved.
+! © 2025-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -579,22 +579,27 @@ contains
         real :: dax, day, daz
         real :: a, b, ax, ay, az, bx, by, bz, kx, ky, kz
 
-        ! Particle velocities above free surface are zero
-        !$omp parallel do private(k) schedule(auto)
-        do k = 1, fdhalf
-            if (1 - k >= nz1 .and. 1 - k <= nz2) then
-                vx(:, :, 1 - k) = 0.0
-                vy(:, :, 1 - k) = 0.0
-            end if
-            if (2 - k >= nz1 .and. 2 - k <= nz2) then
-                vz(:, :, 2 - k) = 0.0
-            end if
-        end do
-        !$omp end parallel do
-
         call commute_array_group(vx, fdhalf)
         call commute_array_group(vy, fdhalf)
         call commute_array_group(vz, fdhalf)
+
+        ! Mirror the particle velocities above the free surface, v(-z) = v(z). The z-derivative
+        ! stencils of the stress update read up to fdhalf rows above the surface; zeros there make
+        ! the velocities discontinuous at the surface, an error that does not vanish with grid
+        ! refinement (surface amplitudes 6-8% too low), while the mirrored values keep them
+        ! continuous. With a free surface the blocks start at k = 1, so these rows are the halo above
+        ! the top block; the mirror follows the exchange so that it reads valid rows.
+        !$omp parallel do private(k) schedule(auto)
+        do k = 1, fdhalf
+            if (1 - k >= nz1 - fdhalf .and. 1 + k <= nz2 + fdhalf) then
+                vx(:, :, 1 - k) = vx(:, :, 1 + k)
+                vy(:, :, 1 - k) = vy(:, :, 1 + k)
+            end if
+            if (2 - k >= nz1 - fdhalf .and. 1 + k <= nz2 + fdhalf) then
+                vz(:, :, 2 - k) = vz(:, :, 1 + k)
+            end if
+        end do
+        !$omp end parallel do
 
         !$omp parallel do private(i, j, k, pdxvx, pdyvx, pdzvx, pdxvy, pdyvy, pdzvy, pdxvz, pdyvz, pdzvz, &
             !$omp ratiox, ratioy, ratioz, dax, day, daz, &
@@ -826,7 +831,7 @@ contains
 
                     ! MPML
                     if (i + 1 <= 1 .or. i + 1 >= nx + 1 &
-                            .or. j + 1 <= 1 .or. j + 1 >= ny + 1) then
+                            .or. j + 1 <= 1 .or. j + 1 >= ny + 1 .or. k >= nz + 1) then
 
                         ratiox = 0.0
                         ratioy = 0.0
@@ -866,11 +871,21 @@ contains
         end do
         !$omp end parallel do
 
-        ! Free surface conditions
+        call commute_array_group(stressxx, fdhalf)
+        call commute_array_group(stressyy, fdhalf)
+        call commute_array_group(stresszz, fdhalf)
+        call commute_array_group(stressyz, fdhalf)
+        call commute_array_group(stressxz, fdhalf)
+        call commute_array_group(stressxy, fdhalf)
+
+        ! Free surface conditions. With a free surface the blocks start at k = 1, so the rows
+        ! above it are the halo above the top block. The halo exchange leaves that halo
+        ! untouched, and mirroring after it also reads valid rows 1 + k in a top block
+        ! thinner than fdhalf + 1
         !$omp parallel do private(k) schedule(auto)
         do k = 1, fdhalf
 
-            if (1 - k >= nz1 .and. 1 - k <= nz2 .and. 1 + k >= nz1 - fdhalf + 1 .and. 1 + k <= nz2 + fdhalf) then
+            if (1 - k >= nz1 - fdhalf .and. 1 + k <= nz2 + fdhalf) then
 
                 ! The stress are mirror-symmetric w.r.t. the free surface, i.e., k = 1
                 stresszz(:, :, 1 - k) = -stresszz(:, :, 1 + k)
@@ -878,15 +893,9 @@ contains
                 ! At the free surface, normal stress is strictly zero
                 stresszz(:, :, 1) = 0.0
 
-                ! The following are redundant but necessary for implementing near-surface explosion/moment tensor source
-                ! In the case of flat free surface, there are no z derivatives of these field variables
-                stressxx(:, :, 1 - k) = -stressxx(:, :, 1 + k)
-                stressyy(:, :, 1 - k) = -stressyy(:, :, 1 + k)
-                stressxy(:, :, 1 - k) = -stressxy(:, :, 1 + k)
-
             end if
 
-            if (2 - k >= nz1 .and. 2 - k <= nz2 .and. 1 + k >= nz1 - fdhalf + 1 .and. 1 + k <= nz2 + fdhalf) then
+            if (2 - k >= nz1 - fdhalf .and. 1 + k <= nz2 + fdhalf) then
 
                 ! The shear stresses sigma_?z are mirror-symmetric
                 stressyz(:, :, 2 - k) = -stressyz(:, :, 1 + k)
@@ -896,13 +905,6 @@ contains
 
         end do
         !$omp end parallel do
-
-        call commute_array_group(stressxx, fdhalf)
-        call commute_array_group(stressyy, fdhalf)
-        call commute_array_group(stresszz, fdhalf)
-        call commute_array_group(stressyz, fdhalf)
-        call commute_array_group(stressxz, fdhalf)
-        call commute_array_group(stressxy, fdhalf)
 
         ! vx component
         !$omp parallel do private(i, j, k, pdxxx, pdyxy, pdzxz, pdxxy, pdyyy, pdzyz, pdxxz, pdyyz, pdzzz, &
@@ -1090,27 +1092,30 @@ contains
     end subroutine
 
     !
-    !> Source term
+    !> Add source
+    !
+    !> With a free surface, every source comes with its mirror image (see add_source_value_3d). The
+    !> image is 2P - S, where S is the source and P the part of it that a traction-free surface
+    !> admits, so that on the surface row, where the source and its image coincide, they add up to
+    !> 2P on that half cell. A force is fully admitted (image = force). A moment tensor loses its
+    !> traction components Mzz, Mxz and Myz: sigma_zz = 0 at the surface gives
+    !> eps_zz = (Mzz - c13*eps_xx - c23*eps_yy)/c33, which turns Mzz into the horizontal moments
+    !> -(c13/c33)*Mzz and -(c23/c33)*Mzz. The images are therefore Mxx - 2*c13/c33*Mzz,
+    !> Myy - 2*c23/c33*Mzz, Mxy, -Mzz, -Mxz and -Myz.
     !
     subroutine add_source(t)
 
         integer, intent(in) :: t
 
-        integer :: sgx, sgy, sgz
-        real :: polar, azimuth, amp
         integer :: k, nbeg, nend
-        real :: m11, m12, m13, m22, m23, m33
-        integer :: irx, iry, irz
-        real :: dz_s
-        real :: rho_s(1:1)
+        real :: polar, azimuth, amp, f
+        real :: mxx, myy, mzz, mxy, mxz, myz
+        real :: rho_s(1:1), ratio(1:2)
+        integer, dimension(6) :: block
+
+        block = [nx1_interior, nx2_interior, ny1_interior, ny2_interior, nz1_interior, nz2_interior]
 
         do k = 1, sgmtr%ns
-
-            if (yn_free_surface) then
-                dz_s = dz_i(sgmtr%srcr(k)%gz)
-            else
-                dz_s = dz
-            end if
 
             nbeg = nint(sgmtr%srcr(k)%t0/dt) + 1
             nend = nbeg + sgmtr%srcr(k)%nt - 1
@@ -1119,215 +1124,84 @@ contains
 
                 amp = sgmtr%srcr(k)%stf(t - nbeg + 1)*sgmtr%srcr(k)%amp*dt
 
-                select case (sgmtr%srcr(k)%mechanism)
+                associate (s => sgmtr%srcr(k))
+
+                select case (s%mechanism)
 
                     case ('force')
-                        ! Force vector
-                        polar = sgmtr%srcr(k)%polar
-                        azimuth = sgmtr%srcr(k)%azimuth
-
-                        sgx = sgmtr%srcr(k)%gx
-                        sgy = sgmtr%srcr(k)%gy
-                        sgz = sgmtr%srcr(k)%gz
+                        ! Force vector, added as a force density on a cell of the nominal size dx*dy*dz,
+                        ! scaled on the refined mesh to the height of each cell (dz_scaling), so that
+                        ! the total force is stf*dx*dy*dz at any depth
+                        polar = s%polar
+                        azimuth = s%azimuth
 
                         rho_s = 0
-                        if (is_in_block(sgx, sgy, sgz)) then
-                            rho_s = rho(sgx, sgy, sgz)
+                        if (is_in_block(s%gx, s%gy, s%gz)) then
+                            rho_s = rho(s%gx, s%gy, s%gz)
                         end if
                         call allreduce_array_group(rho_s)
-                        amp = amp/rho_s(1)
+                        f = amp/rho_s(1)
 
-                        sgx = sgmtr%srcr(k)%hx
-                        sgy = sgmtr%srcr(k)%gy
-                        sgz = sgmtr%srcr(k)%gz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        vx(sgx + irx, sgy + iry, sgz + irz) = &
-                                            vx(sgx + irx, sgy + iry, sgz + irz) + sin(polar)*cos(azimuth)*amp &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
+                        call add_source_value_3d(vx, s%hx, s%gy, s%gz, s%interp_hx, s%interp_iy, s%interp_iz, &
+                            sin(polar)*cos(azimuth)*f, sin(polar)*cos(azimuth)*f, .false., yn_free_surface, block, &
+                            dz_scaling_i)
+                        call add_source_value_3d(vy, s%gx, s%hy, s%gz, s%interp_ix, s%interp_hy, s%interp_iz, &
+                            sin(polar)*sin(azimuth)*f, sin(polar)*sin(azimuth)*f, .false., yn_free_surface, block, &
+                            dz_scaling_i)
+                        call add_source_value_3d(vz, s%gx, s%gy, s%hz, s%interp_ix, s%interp_iy, s%interp_hz, &
+                            cos(polar)*f, cos(polar)*f, .true., yn_free_surface, block, dz_scaling_h)
 
-                        sgx = sgmtr%srcr(k)%gx
-                        sgy = sgmtr%srcr(k)%hy
-                        sgz = sgmtr%srcr(k)%gz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        vy(sgx + irx, sgy + iry, sgz + irz) = &
-                                            vy(sgx + irx, sgy + iry, sgz + irz) + sin(polar)*sin(azimuth)*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
+                    case ('explosion', 'mt')
+                        ! Moment tensor (explosion: identity) added as stress drop
+                        if (s%mechanism == 'explosion') then
+                            mxx = 1.0
+                            myy = 1.0
+                            mzz = 1.0
+                            mxy = 0.0
+                            mxz = 0.0
+                            myz = 0.0
+                        else
+                            mxx = s%moment_tensor(1, 1)
+                            myy = s%moment_tensor(2, 2)
+                            mzz = s%moment_tensor(3, 3)
+                            mxy = s%moment_tensor(1, 2)
+                            mxz = s%moment_tensor(1, 3)
+                            myz = s%moment_tensor(2, 3)
+                        end if
+                        ! Moment density on a cell of the nominal size dx*dy*dz, scaled on the refined
+                        ! mesh to the height of each cell (dz_scaling)
+                        amp = amp/(dx*dy*dz)
 
-                        sgx = sgmtr%srcr(k)%gx
-                        sgy = sgmtr%srcr(k)%gy
-                        sgz = sgmtr%srcr(k)%hz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        vz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            vz(sgx + irx, sgy + iry, sgz + irz) + cos(polar)*amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
+                        ! Free-surface conversion ratios c13/c33 and c23/c33 at the surface above the source
+                        ratio = 0
+                        if (yn_free_surface) then
+                            if (is_in_block(s%gx, s%gy, 1)) then
+                                ratio = [c13(s%gx, s%gy, 1), c23(s%gx, s%gy, 1)]/c33(s%gx, s%gy, 1)
+                            end if
+                            call allreduce_array_group(ratio)
+                        end if
 
-                    case ('explosion')
-                        ! Explosive source
-                        amp = amp/(dx*dy*dz_s)
-
-                        sgx = sgmtr%srcr(k)%gx
-                        sgy = sgmtr%srcr(k)%gy
-                        sgz = sgmtr%srcr(k)%gz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        stressxx(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxx(sgx + irx, sgy + iry, sgz + irz) - amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        stressyy(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressyy(sgx + irx, sgy + iry, sgz + irz) - amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        stresszz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stresszz(sgx + irx, sgy + iry, sgz + irz) - amp &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
-
-                    case ('mt')
-                        ! Moment tensor implemented as stress drop on stress components
-                        m11 = sgmtr%srcr(k)%moment_tensor(1, 1)
-                        m12 = sgmtr%srcr(k)%moment_tensor(1, 2)
-                        m13 = sgmtr%srcr(k)%moment_tensor(1, 3)
-                        m22 = sgmtr%srcr(k)%moment_tensor(2, 2)
-                        m23 = sgmtr%srcr(k)%moment_tensor(2, 3)
-                        m33 = sgmtr%srcr(k)%moment_tensor(3, 3)
-
-                        amp = amp/(dx*dy*dz_s)
-
-                        sgx = sgmtr%srcr(k)%gx
-                        sgy = sgmtr%srcr(k)%gy
-                        sgz = sgmtr%srcr(k)%gz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        stressxx(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxx(sgx + irx, sgy + iry, sgz + irz) - amp*m11 &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        stressyy(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressyy(sgx + irx, sgy + iry, sgz + irz) - amp*m22 &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                        stresszz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stresszz(sgx + irx, sgy + iry, sgz + irz) - amp*m33 &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
-
-                        sgx = sgmtr%srcr(k)%hx
-                        sgy = sgmtr%srcr(k)%hy
-                        sgz = sgmtr%srcr(k)%gz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        stressxy(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxy(sgx + irx, sgy + iry, sgz + irz) - amp*m12 &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_iz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
-
-                        sgx = sgmtr%srcr(k)%hx
-                        sgy = sgmtr%srcr(k)%gy
-                        sgz = sgmtr%srcr(k)%hz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        stressxz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressxz(sgx + irx, sgy + iry, sgz + irz) - amp*m13 &
-                                            *sgmtr%srcr(k)%interp_hx(irx) &
-                                            *sgmtr%srcr(k)%interp_iy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
-
-                        sgx = sgmtr%srcr(k)%gx
-                        sgy = sgmtr%srcr(k)%hy
-                        sgz = sgmtr%srcr(k)%hz
-                        !$omp parallel do private(irx, iry, irz) collapse(3) schedule(auto)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
-                                    if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                        stressyz(sgx + irx, sgy + iry, sgz + irz) = &
-                                            stressyz(sgx + irx, sgy + iry, sgz + irz) - amp*m23 &
-                                            *sgmtr%srcr(k)%interp_ix(irx) &
-                                            *sgmtr%srcr(k)%interp_hy(iry) &
-                                            *sgmtr%srcr(k)%interp_hz(irz)
-                                    end if
-                                end do
-                            end do
-                        end do
-                        !$omp end parallel do
+                        call add_source_value_3d(stressxx, s%gx, s%gy, s%gz, s%interp_ix, s%interp_iy, s%interp_iz, &
+                            -amp*mxx, -amp*(mxx - 2.0*ratio(1)*mzz), .false., yn_free_surface, block, dz_scaling_i)
+                        call add_source_value_3d(stressyy, s%gx, s%gy, s%gz, s%interp_ix, s%interp_iy, s%interp_iz, &
+                            -amp*myy, -amp*(myy - 2.0*ratio(2)*mzz), .false., yn_free_surface, block, dz_scaling_i)
+                        call add_source_value_3d(stresszz, s%gx, s%gy, s%gz, s%interp_ix, s%interp_iy, s%interp_iz, &
+                            -amp*mzz, amp*mzz, .false., yn_free_surface, block, dz_scaling_i)
+                        call add_source_value_3d(stressxy, s%hx, s%hy, s%gz, s%interp_hx, s%interp_hy, s%interp_iz, &
+                            -amp*mxy, -amp*mxy, .false., yn_free_surface, block, dz_scaling_i)
+                        call add_source_value_3d(stressxz, s%hx, s%gy, s%hz, s%interp_hx, s%interp_iy, s%interp_hz, &
+                            -amp*mxz, amp*mxz, .true., yn_free_surface, block, dz_scaling_h)
+                        call add_source_value_3d(stressyz, s%gx, s%hy, s%hz, s%interp_ix, s%interp_hy, s%interp_hz, &
+                            -amp*myz, amp*myz, .true., yn_free_surface, block, dz_scaling_h)
 
                 end select
+
+                end associate
+
             end if
+
         end do
 
-    end subroutine
+    end subroutine add_source
 
 end module

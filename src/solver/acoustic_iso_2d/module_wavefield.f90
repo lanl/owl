@@ -1,5 +1,5 @@
 !
-! © 2025. Triad National Security, LLC. All rights reserved.
+! © 2025-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -120,6 +120,16 @@ contains
         integer :: i, j
         real :: pdxvx, pdzvz, pdxp, pdzp
 
+        ! The pressure is odd about the free surface (row 1), so vz is even: mirror vz above the
+        ! surface, vz(-z) = vz(z). The z-derivative stencil below reads up to fdhalf rows above the
+        ! surface; leaving zeros there makes vz discontinuous at the surface, an error that does not
+        ! vanish with grid refinement.
+        !$omp parallel do private(j) schedule(auto)
+        do j = 1, fdhalf
+            vz(:, 2 - j) = vz(:, 1 + j)
+        end do
+        !$omp end parallel do
+
         !$omp parallel do private(i, j, pdxvx, pdzvz) collapse(2) schedule(auto)
         do j = 2, nz + pml
             do i = -pml + 1, nx + pml
@@ -195,9 +205,7 @@ contains
 
         integer :: k
         integer :: sgx, sgz, nbeg, nend, shx, shz
-        real :: amp, polar
-
-        integer :: irx, irz
+        real :: amp, polar, a
 
         do k = 1, sgmtr%ns
 
@@ -216,43 +224,22 @@ contains
                 select case (sgmtr%srcr(k)%mechanism)
 
                     case ('force')
-                        ! Force vector
+                        ! Force vector. Under a free surface (p = 0) the image of a horizontal force is
+                        ! opposite to it (vx is odd about the surface) and the image of a vertical
+                        ! force equals it (vz is even about the surface)
                         polar = sgmtr%srcr(k)%polar
-
-                        !$omp parallel do private(irx, irz) collapse(2) schedule(auto)
-                        do irz = -nkw, nkw
-                            do irx = -nkw, nkw
-                                if (ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                    vx(shx + irx, sgz + irz) = &
-                                        vx(shx + irx, sgz + irz) + sin(polar)*amp/rho(shx, sgz) &
-                                        *sgmtr%srcr(k)%interp_hx(irx) &
-                                        *sgmtr%srcr(k)%interp_iz(irz)
-                                end if
-                                if (ifelse(yn_free_surface, shz + irz >= 2, .true.)) then
-                                    vz(sgx + irx, shz + irz) = &
-                                        vz(sgx + irx, shz + irz) + cos(polar)*amp/rho(sgx, shz) &
-                                        *sgmtr%srcr(k)%interp_ix(irx) &
-                                        *sgmtr%srcr(k)%interp_hz(irz)
-                                end if
-                            end do
-                        end do
-                        !$omp end parallel do
+                        a = sin(polar)*amp/rho(shx, sgz)
+                        call add_source_value_2d(vx, shx, sgz, sgmtr%srcr(k)%interp_hx, sgmtr%srcr(k)%interp_iz, &
+                            a, -a, .false., yn_free_surface)
+                        a = cos(polar)*amp/rho(sgx, shz)
+                        call add_source_value_2d(vz, sgx, shz, sgmtr%srcr(k)%interp_ix, sgmtr%srcr(k)%interp_hz, &
+                            a, a, .true., yn_free_surface)
 
                     case ('explosion')
-                        ! Explosive source
-
-                        !$omp parallel do private(irx, irz) collapse(2) schedule(auto)
-                        do irz = -nkw, nkw
-                            do irx = -nkw, nkw
-                                if (ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                                    p(sgx + irx, sgz + irz) = &
-                                        p(sgx + irx, sgz + irz) + amp &
-                                        *sgmtr%srcr(k)%interp_ix(irx) &
-                                        *sgmtr%srcr(k)%interp_iz(irz)
-                                end if
-                            end do
-                        end do
-                        !$omp end parallel do
+                        ! Explosive source. Under a free surface its image is opposite to it (p is odd
+                        ! about the surface), so a source on the surface radiates nothing
+                        call add_source_value_2d(p, sgx, sgz, sgmtr%srcr(k)%interp_ix, sgmtr%srcr(k)%interp_iz, &
+                            amp, -amp, .false., yn_free_surface)
 
                 end select
 

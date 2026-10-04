@@ -42,6 +42,24 @@ def read_model(path, shape):
 # ------------------------------------------------------------------------------
 
 
+def decode_su_ns(hdr):
+    """Number of samples in a 240-byte SU trace header, decoded as in OWL's
+    module_su.f90: bytes 115-116 hold an unsigned 16-bit integer, and bytes
+    233-236 hold the full value when it is larger than 65535.
+    """
+    ns = int(np.frombuffer(hdr[114:116].tobytes(), dtype=np.uint16)[0])
+    ns32 = int(np.frombuffer(hdr[232:236].tobytes(), dtype=np.int32)[0])
+    if ns32 > 65535 and ns32 % 65536 == ns:
+        ns = ns32
+    return ns
+
+
+def encode_su_ns(hdr, ns):
+    """Store the number of samples in a 240-byte SU trace header; inverse of decode_su_ns."""
+    hdr[114:116] = np.frombuffer(np.uint16(ns % 65536).tobytes(), dtype=np.uint8)
+    hdr[232:236] = np.frombuffer(np.int32(ns if ns > 65535 else 0).tobytes(), dtype=np.uint8)
+
+
 def read_su(path):
     """Read a SU file written by OWL (native little-endian, 240-byte headers).
 
@@ -50,7 +68,7 @@ def read_su(path):
     raw = np.fromfile(path, dtype=np.uint8)
     if raw.size < 240:
         raise ValueError(f"{path}: too small to be a SU file")
-    ns = int(np.frombuffer(raw[114:116].tobytes(), dtype=np.int16)[0])
+    ns = decode_su_ns(raw)
     dt_us = int(np.frombuffer(raw[116:118].tobytes(), dtype=np.uint16)[0])
     trace_bytes = 240 + 4 * ns
     if raw.size % trace_bytes != 0:
@@ -72,7 +90,7 @@ def write_su(path, data, dt, like=None):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     if like is not None:
         raw = np.fromfile(like, dtype=np.uint8)
-        ns = int(np.frombuffer(raw[114:116].tobytes(), dtype=np.int16)[0])
+        ns = decode_su_ns(raw)
         if ns != nt:
             raise ValueError(f"write_su: ns mismatch with template ({ns} vs {nt})")
         trace_bytes = 240 + 4 * ns
@@ -85,7 +103,7 @@ def write_su(path, data, dt, like=None):
         with open(path, "wb") as f:
             for i in range(ntr):
                 hdr = np.zeros(240, dtype=np.uint8)
-                hdr[114:116] = np.frombuffer(np.int16(nt).tobytes(), dtype=np.uint8)
+                encode_su_ns(hdr, nt)
                 hdr[116:118] = np.frombuffer(np.uint16(round(dt * 1e6)).tobytes(), dtype=np.uint8)
                 f.write(hdr.tobytes())
                 f.write(data[:, i].tobytes())

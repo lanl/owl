@@ -1,5 +1,5 @@
 !
-! © 2025. Triad National Security, LLC. All rights reserved.
+! © 2025-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -23,7 +23,7 @@ module acoustic_iso_2d_vars
     use mod_su
     use mod_source_receiver, only: source_receiver_geometry
     use mod_utility, only: check_dt_f0
-    use mod_source_receiver, only: nkw
+    use mod_source_receiver, only: nkw, add_source_value_2d, source_value_2d
 
     use acoustic_iso_2d
 

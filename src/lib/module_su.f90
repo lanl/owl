@@ -1,5 +1,5 @@
 !
-! © 2025. Triad National Security, LLC. All rights reserved.
+! © 2025-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -71,7 +71,8 @@ module mod_su
         integer(2) :: MuteTimeStart
         integer(2) :: MuteTimeEnd
         ! byte 115
-        integer(2) :: ns
+        ! ns is a 4-byte integer in memory; see encode_su_ns for its encoding in the file
+        integer(4) :: ns
         integer(2) :: dt
         integer(2) :: GainType
         integer(2) :: InstrumentGainConstant
@@ -117,6 +118,7 @@ module mod_su
         integer(4) :: ntr
         integer(2) :: mark
         integer(2) :: shortpad
+        ! byte 213; OWL stores ns > 65535 at bytes 233-236, see encode_su_ns
         integer(2), dimension(1:14) :: unass
         ! end SU/SEGY differences
 
@@ -1192,6 +1194,54 @@ contains
 
     end subroutine init_su
 
+    !
+    !> Encode the number of samples into the SU trace header. SU defines ns at
+    !> bytes 115-116 as an unsigned 16-bit integer, so this field holds ns <= 65535.
+    !> For a larger ns, this field holds the lower 16 bits of ns, and bytes 233-236,
+    !> which are unassigned in SU, hold the full ns as a 4-byte integer.
+    !
+    pure subroutine encode_su_ns(ns, ns16, ns32)
+
+        integer, intent(in) :: ns
+        integer(2), intent(out) :: ns16
+        integer(4), intent(out) :: ns32
+
+        integer :: low
+
+        ! Lower 16 bits of ns, with the bit pattern of an unsigned 16-bit integer
+        low = iand(ns, 65535)
+        if (low > 32767) then
+            low = low - 65536
+        end if
+        ns16 = int(low, kind=2)
+
+        if (ns > 65535) then
+            ns32 = ns
+        else
+            ns32 = 0
+        end if
+
+    end subroutine encode_su_ns
+
+    !
+    !> Decode the number of samples from the SU trace header; inverse of encode_su_ns
+    !
+    pure function decode_su_ns(ns16, ns32) result(ns)
+
+        integer(2), intent(in) :: ns16
+        integer(4), intent(in) :: ns32
+        integer :: ns
+
+        ns = iand(int(ns16), 65535)
+
+        ! Bytes 233-236 count only when they agree with bytes 115-116, because
+        ! SU files from other programs may hold unrelated values there
+        if (ns32 > 65535 .and. iand(ns32, 65535) == ns) then
+            ns = ns32
+        end if
+
+    end function decode_su_ns
+
     subroutine load_su(this, infile, nt, dt, nr, header_only, stdin)
 
         class(su), intent(inout) :: this
@@ -1201,8 +1251,9 @@ contains
         integer, intent(in), optional :: nr
         logical, intent(in), optional :: header_only, stdin
 
-        integer(kind=2) :: ns, ds
-        integer :: funit, i
+        integer(kind=2) :: ns16, ds
+        integer(kind=4) :: ns32
+        integer :: ns, funit, i
         integer(kind=8) :: trcbegpos
         logical :: read_header_only
         logical :: from_stdin
@@ -1259,7 +1310,9 @@ contains
         if (present(nt)) then
             this%nt = nt
         else
-            read (funit, pos=115) ns
+            read (funit, pos=115) ns16
+            read (funit, pos=233) ns32
+            ns = decode_su_ns(ns16, ns32)
             if (this%nt == 0) then
                 this%nt = ns
             else
@@ -1362,7 +1415,7 @@ contains
             read (funit, pos=trcbegpos + 108) this%trace(i)%header%DelayRecordingTime
             read (funit, pos=trcbegpos + 110) this%trace(i)%header%MuteTimeStart
             read (funit, pos=trcbegpos + 112) this%trace(i)%header%MuteTimeEnd
-            read (funit, pos=trcbegpos + 114) this%trace(i)%header%ns
+            read (funit, pos=trcbegpos + 114) ns16
             read (funit, pos=trcbegpos + 116) this%trace(i)%header%dt
             read (funit, pos=trcbegpos + 118) this%trace(i)%header%GainType
             read (funit, pos=trcbegpos + 120) this%trace(i)%header%InstrumentGainConstant
@@ -1402,6 +1455,8 @@ contains
             read (funit, pos=trcbegpos + 192) this%trace(i)%header%f2
             read (funit, pos=trcbegpos + 204) this%trace(i)%header%ntr
             !            read (funit, pos=trcbegpos + 208) this%trace(i)%header%nsample
+            read (funit, pos=trcbegpos + 232) ns32
+            this%trace(i)%header%ns = decode_su_ns(ns16, ns32)
 
             ! read trace data
             if (.not. read_header_only) then
@@ -1460,6 +1515,8 @@ contains
 
         integer :: ntr, funit, i, ir
         integer(8) :: trcbegpos, existing_size
+        integer(2) :: ns16
+        integer(4) :: ns32
         integer, allocatable, dimension(:) :: trcrange
         character(len=24) :: convert_type
         logical :: append_to_existing
@@ -1506,6 +1563,9 @@ contains
             ! Trace start byte location
             trcbegpos = existing_size + int(int(ir - 1, kind=8)*(240 + int(this%nt, kind=8)*4) + 1, kind=8)
 
+            ! Number of samples in the header fields
+            call encode_su_ns(this%trace(i)%header%ns, ns16, ns32)
+
             ! Write trace header
             write (funit, pos=trcbegpos) this%trace(i)%header%TraceSequenceLine
             write (funit, pos=trcbegpos + 4) this%trace(i)%header%TraceSequenceFile
@@ -1545,7 +1605,7 @@ contains
             write (funit, pos=trcbegpos + 108) this%trace(i)%header%DelayRecordingTime
             write (funit, pos=trcbegpos + 110) this%trace(i)%header%MuteTimeStart
             write (funit, pos=trcbegpos + 112) this%trace(i)%header%MuteTimeEnd
-            write (funit, pos=trcbegpos + 114) this%trace(i)%header%ns
+            write (funit, pos=trcbegpos + 114) ns16
             write (funit, pos=trcbegpos + 116) this%trace(i)%header%dt
             write (funit, pos=trcbegpos + 118) this%trace(i)%header%GainType
             write (funit, pos=trcbegpos + 120) this%trace(i)%header%InstrumentGainConstant
@@ -1586,6 +1646,7 @@ contains
 
             write (funit, pos=trcbegpos + 204) ntr
             !            write (funit, pos=trcbegpos + 208) this%nt
+            write (funit, pos=trcbegpos + 232) ns32
 
             ! Write trace data
             write (funit, pos=trcbegpos + 240) this%trace(i)%data
@@ -1617,6 +1678,8 @@ contains
 
         integer :: ntr, i, ir
         integer(8) :: trcbegpos
+        integer(2) :: ns16
+        integer(4) :: ns32
         integer, allocatable, dimension(:) :: trcrange
         character(len=24) :: convert_type
         logical :: append_to_existing
@@ -1663,6 +1726,9 @@ contains
             ! Trace start byte location
             trcbegpos = int(int(ir - 1, kind=8)*(240 + int(this%nt, kind=8)*4) + 1, kind=8)
 
+            ! Number of samples in the header fields
+            call encode_su_ns(this%trace(i)%header%ns, ns16, ns32)
+
             ! Write trace header
             write (output_unit, pos=trcbegpos) this%trace(i)%header%TraceSequenceLine
             write (output_unit, pos=trcbegpos + 4) this%trace(i)%header%TraceSequenceFile
@@ -1702,7 +1768,7 @@ contains
             write (output_unit, pos=trcbegpos + 108) this%trace(i)%header%DelayRecordingTime
             write (output_unit, pos=trcbegpos + 110) this%trace(i)%header%MuteTimeStart
             write (output_unit, pos=trcbegpos + 112) this%trace(i)%header%MuteTimeEnd
-            write (output_unit, pos=trcbegpos + 114) this%trace(i)%header%ns
+            write (output_unit, pos=trcbegpos + 114) ns16
             write (output_unit, pos=trcbegpos + 116) this%trace(i)%header%dt
             write (output_unit, pos=trcbegpos + 118) this%trace(i)%header%GainType
             write (output_unit, pos=trcbegpos + 120) this%trace(i)%header%InstrumentGainConstant
@@ -1743,6 +1809,7 @@ contains
 
             write (output_unit, pos=trcbegpos + 204) ntr
             !            write (output_unit, pos=trcbegpos + 208) this%nt
+            write (output_unit, pos=trcbegpos + 232) ns32
 
             ! Write trace data
             write (output_unit, pos=trcbegpos + 240) this%trace(i)%data

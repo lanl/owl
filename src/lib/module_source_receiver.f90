@@ -338,7 +338,7 @@ contains
                 call alloc_array(topo_i, [-pml, nx + pml + 1], source=ginterp(topo(:, 1), topo(:, 2), topox, method=topo_interp))
 
                 if (measure_source_depth_from_surface) then
-                    src_below_free_surface = trues(gmtr(i)%nr)
+                    src_below_free_surface = trues(gmtr(i)%ns)
                 else
                     stp = ginterp(topox, -topo_i, gmtr(i)%srcr(:)%x, topo_interp)
                     src_below_free_surface = gmtr(i)%srcr(:)%z >= stp
@@ -367,7 +367,7 @@ contains
                 topoy = meshgrid([nx + 2*pml + 2, ny + 2*pml + 2], [dx, dy], [-(pml + 1)*dx + ox, -(pml + 1)*dy + oy], dim=2)
 
                 if (measure_source_depth_from_surface) then
-                    src_below_free_surface = trues(gmtr(i)%nr)
+                    src_below_free_surface = trues(gmtr(i)%ns)
                 else
                     stp = ginterp(topox, topoy, flatten(-topo_ixiy), gmtr(i)%srcr(:)%x, gmtr(i)%srcr(:)%y)
                     src_below_free_surface = gmtr(i)%srcr(:)%z >= stp
@@ -386,7 +386,7 @@ contains
 
             else
 
-                src_below_free_surface = trues(gmtr(i)%nr)
+                src_below_free_surface = trues(gmtr(i)%ns)
                 rec_below_free_surface = trues(gmtr(i)%nr)
                 topo_max = 0
 
@@ -1129,5 +1129,206 @@ contains
         end do
 
     end subroutine
+
+    !
+    !> Add a source value a, spread by the interpolation weights wx(irx)*wz(irz), to the 2D field w
+    !> around the grid point (gx, gz).
+    !>
+    !> With a free surface, the source comes with its mirror image of value a_image (method of
+    !> images): stencil rows above the surface act through their mirror rows below it, and on the
+    !> surface row the source and its image coincide. Nothing is written above the surface. Fields
+    !> on integer z rows have the surface on row 1 and mirror row r to 2 - r; fields on half-integer
+    !> z rows (half = .true.) have the surface between rows 1 and 2 and mirror row r to 3 - r.
+    !>
+    !> On the vertically refined mesh of free-surface modeling, a and a_image are densities on a
+    !> cell of the nominal height dz, and the value on each row r is scaled by zscale(r) = dz/dz(r)
+    !> (zscale is used if present and allocated), so that each row receives the density of its own
+    !> cell height. Together with receivers that interpolate with the same weights, this makes the
+    !> injection the adjoint of the receiver sampling (source-receiver reciprocity).
+    !
+    subroutine add_source_value_2d(w, gx, gz, wx, wz, a, a_image, half, free_surface, zscale)
+
+        real, allocatable, dimension(:, :), intent(inout) :: w
+        integer, intent(in) :: gx, gz
+        real, dimension(-nkw:nkw), intent(in) :: wx, wz
+        real, intent(in) :: a, a_image
+        logical, intent(in) :: half, free_surface
+        real, allocatable, dimension(:), intent(in), optional :: zscale
+
+        integer :: irx, irz, r, r1, rr
+        real :: ar, ai
+        logical :: scaled
+
+        scaled = .false.
+        if (present(zscale)) scaled = allocated(zscale)
+
+        ! First row on or below the free surface, and the sum of a row and its mirror row
+        r1 = merge(2, 1, half)
+        rr = merge(3, 2, half)
+
+        do irz = -nkw, nkw
+            r = gz + irz
+            if (.not. free_surface .or. r >= r1) then
+                ar = a
+                if (scaled) ar = a*zscale(r)
+                do irx = -nkw, nkw
+                    w(gx + irx, r) = w(gx + irx, r) + ar*wx(irx)*wz(irz)
+                end do
+            end if
+            if (free_surface .and. rr - r >= r1) then
+                ai = a_image
+                if (scaled) ai = a_image*zscale(rr - r)
+                do irx = -nkw, nkw
+                    w(gx + irx, rr - r) = w(gx + irx, rr - r) + ai*wx(irx)*wz(irz)
+                end do
+            end if
+        end do
+
+    end subroutine add_source_value_2d
+
+    !
+    !> The 3D version of add_source_value_2d; only points inside the owned index range
+    !> block = [x1, x2, y1, y2, z1, z2] of this MPI rank are written.
+    !
+    subroutine add_source_value_3d(w, gx, gy, gz, wx, wy, wz, a, a_image, half, free_surface, block, zscale)
+
+        real, allocatable, dimension(:, :, :), intent(inout) :: w
+        integer, intent(in) :: gx, gy, gz
+        real, dimension(-nkw:nkw), intent(in) :: wx, wy, wz
+        real, intent(in) :: a, a_image
+        logical, intent(in) :: half, free_surface
+        integer, dimension(6), intent(in) :: block
+        real, allocatable, dimension(:), intent(in), optional :: zscale
+
+        integer :: irx, iry, irz, i, j, r, r1, rr
+        real :: ar, ai
+        logical :: scaled, direct, image
+
+        scaled = .false.
+        if (present(zscale)) scaled = allocated(zscale)
+
+        ! First row on or below the free surface, and the sum of a row and its mirror row
+        r1 = merge(2, 1, half)
+        rr = merge(3, 2, half)
+
+        do irz = -nkw, nkw
+            r = gz + irz
+            direct = (.not. free_surface .or. r >= r1) .and. r >= block(5) .and. r <= block(6)
+            image = free_surface .and. rr - r >= r1 .and. rr - r >= block(5) .and. rr - r <= block(6)
+            ar = a
+            ai = a_image
+            if (scaled .and. direct) ar = a*zscale(r)
+            if (scaled .and. image) ai = a_image*zscale(rr - r)
+            do iry = -nkw, nkw
+                j = gy + iry
+                do irx = -nkw, nkw
+                    i = gx + irx
+                    if (i < block(1) .or. i > block(2) .or. j < block(3) .or. j > block(4)) cycle
+                    if (direct) then
+                        w(i, j, r) = w(i, j, r) + ar*wx(irx)*wy(iry)*wz(irz)
+                    end if
+                    if (image) then
+                        w(i, j, rr - r) = w(i, j, rr - r) + ai*wx(irx)*wy(iry)*wz(irz)
+                    end if
+                end do
+            end do
+        end do
+
+    end subroutine add_source_value_3d
+
+    !
+    !> Transpose of add_source_value_2d: the sums of the 2D field w weighted by the interpolation
+    !> weights wx(irx)*wz(irz) (and zscale) over the points where add_source_value_2d adds the source
+    !> (v(1)) and its mirror image (v(2)), as needed for the gradient with respect to source parameters
+    !
+    function source_value_2d(w, gx, gz, wx, wz, half, free_surface, zscale) result(v)
+
+        real, allocatable, dimension(:, :), intent(in) :: w
+        integer, intent(in) :: gx, gz
+        real, dimension(-nkw:nkw), intent(in) :: wx, wz
+        logical, intent(in) :: half, free_surface
+        real, allocatable, dimension(:), intent(in), optional :: zscale
+        real, dimension(2) :: v
+
+        integer :: irx, irz, r, r1, rr
+        real :: sr, si
+        logical :: scaled
+
+        scaled = .false.
+        if (present(zscale)) scaled = allocated(zscale)
+
+        r1 = merge(2, 1, half)
+        rr = merge(3, 2, half)
+
+        v = 0
+        do irz = -nkw, nkw
+            r = gz + irz
+            if (.not. free_surface .or. r >= r1) then
+                sr = 1.0
+                if (scaled) sr = zscale(r)
+                do irx = -nkw, nkw
+                    v(1) = v(1) + w(gx + irx, r)*sr*wx(irx)*wz(irz)
+                end do
+            end if
+            if (free_surface .and. rr - r >= r1) then
+                si = 1.0
+                if (scaled) si = zscale(rr - r)
+                do irx = -nkw, nkw
+                    v(2) = v(2) + w(gx + irx, rr - r)*si*wx(irx)*wz(irz)
+                end do
+            end if
+        end do
+
+    end function source_value_2d
+
+    !
+    !> The 3D version of source_value_2d; only points inside the owned index range
+    !> block = [x1, x2, y1, y2, z1, z2] of this MPI rank are summed
+    !
+    function source_value_3d(w, gx, gy, gz, wx, wy, wz, half, free_surface, block, zscale) result(v)
+
+        real, allocatable, dimension(:, :, :), intent(in) :: w
+        integer, intent(in) :: gx, gy, gz
+        real, dimension(-nkw:nkw), intent(in) :: wx, wy, wz
+        logical, intent(in) :: half, free_surface
+        integer, dimension(6), intent(in) :: block
+        real, allocatable, dimension(:), intent(in), optional :: zscale
+        real, dimension(2) :: v
+
+        integer :: irx, iry, irz, i, j, r, r1, rr
+        real :: sr, si
+        logical :: scaled, direct, image
+
+        scaled = .false.
+        if (present(zscale)) scaled = allocated(zscale)
+
+        r1 = merge(2, 1, half)
+        rr = merge(3, 2, half)
+
+        v = 0
+        do irz = -nkw, nkw
+            r = gz + irz
+            direct = (.not. free_surface .or. r >= r1) .and. r >= block(5) .and. r <= block(6)
+            image = free_surface .and. rr - r >= r1 .and. rr - r >= block(5) .and. rr - r <= block(6)
+            sr = 1.0
+            si = 1.0
+            if (scaled .and. direct) sr = zscale(r)
+            if (scaled .and. image) si = zscale(rr - r)
+            do iry = -nkw, nkw
+                j = gy + iry
+                do irx = -nkw, nkw
+                    i = gx + irx
+                    if (i < block(1) .or. i > block(2) .or. j < block(3) .or. j > block(4)) cycle
+                    if (direct) then
+                        v(1) = v(1) + w(i, j, r)*sr*wx(irx)*wy(iry)*wz(irz)
+                    end if
+                    if (image) then
+                        v(2) = v(2) + w(i, j, rr - r)*si*wx(irx)*wy(iry)*wz(irz)
+                    end if
+                end do
+            end do
+        end do
+
+    end function source_value_3d
 
 end module

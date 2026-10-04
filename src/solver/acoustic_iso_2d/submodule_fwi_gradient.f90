@@ -32,7 +32,8 @@ contains
 
         class(wave_solver_acoustic_iso_2d), intent(inout) :: this
 
-        integer :: l, ir, irx, irz, rgx, rgz, t
+        integer :: l, ir, t
+        real :: amp
         type(grid2) :: grd
 
         yn_energy_precond = this%energy_precond
@@ -119,32 +120,17 @@ contains
                 end if
             end if
 
-            ! Read and add adjoint source -- the receivers must be independent as when
-            ! receivers are not at grid points, adjoint source may add to a same grid point
-            ! at different/adjacent receivers.
-            ! The following openmp does not parallize receivers, but only parallize within each receiver.
-            !$omp parallel private(ir, irx, irz, rgx, rgz)
+            ! Add the adjoint sources: the data residuals as pressure sources at the receivers,
+            ! with their mirror images under a free surface (p is odd about the surface), the
+            ! transpose of the receiver sampling. Adjacent receivers may add to the same grid points,
+            ! hence the serial loop over receivers.
             do ir = 1, sgmtr%nr
                 if (sgmtr%recr(ir)%weight /= 0) then
-
-                    rgx = sgmtr%recr(ir)%gx
-                    rgz = sgmtr%recr(ir)%gz
-
-                    !$omp do collapse(2)
-                    do irz = -nkw, nkw
-                        do irx = -nkw, nkw
-                            pr(rgx + irx, rgz + irz) = pr(rgx + irx, rgz + irz) &
-                                + this%seis_pr%trace(ir)%data(t) &
-                                *sgmtr%recr(ir)%interp_ix(irx) &
-                                *sgmtr%recr(ir)%interp_iz(irz) &
-                                *sgmtr%recr(ir)%weight
-                        end do
-                    end do
-                    !$omp end do
-
+                    amp = this%seis_pr%trace(ir)%data(t)*sgmtr%recr(ir)%weight
+                    call add_source_value_2d(pr, sgmtr%recr(ir)%gx, sgmtr%recr(ir)%gz, &
+                        sgmtr%recr(ir)%interp_ix, sgmtr%recr(ir)%interp_iz, amp, -amp, .false., yn_free_surface)
                 end if
             end do
-            !$omp end parallel
 
             ! Gradient
             if (mod(t, cc_step_interval) == 0) then
@@ -174,12 +160,13 @@ contains
 
             energy_src_v = energy_src_v + 1.0e-3*maxval(energy_src_v)
             energy_rec_v = energy_rec_v + 1.0e-3*maxval(energy_rec_v)
-            energy_src_v = sqrt(energy_src_v*energy_rec_v)
+            ! The product of two small energies can underflow in single precision
+            energy_src_v = sqrt(energy_src_v)*sqrt(energy_rec_v)
             grad_vp = grad_vp/energy_src_v
 
             energy_src_a = energy_src_a + 1.0e-3*maxval(energy_src_a)
             energy_rec_a = energy_rec_a + 1.0e-3*maxval(energy_rec_a)
-            energy_src_a = sqrt(energy_src_a*energy_rec_a)
+            energy_src_a = sqrt(energy_src_a)*sqrt(energy_rec_a)
             grad_rho = grad_rho/energy_src_a
 
         end if

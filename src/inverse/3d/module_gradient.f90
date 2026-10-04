@@ -345,12 +345,15 @@ contains
                             tidy(dir_to)//'/shot_'//num2str(set_srcid(ishot))//'_seismogram_'//tidy(data_name(i))//'.su')
                     end do
 
-                    ! Copy initial models to dir_working/iteration_0
-                    call make_directory(tidy(dir_working)//'/iteration_0/model')
-                    do i = 1, nmodel
-                        call output_array(model_m(i)%array, tidy(dir_working)//'/iteration_0/model/' &
-                            //tidy(model_name(i))//'.bin')
-                    end do
+                    ! Copy initial models to dir_working/iteration_0. Every group leader reaches
+                    ! here, so only rank 0 writes, to avoid several ranks writing the same files
+                    if (rankid == 0) then
+                        call make_directory(tidy(dir_working)//'/iteration_0/model')
+                        do i = 1, nmodel
+                            call output_array(model_m(i)%array, tidy(dir_working)//'/iteration_0/model/' &
+                                //tidy(model_name(i))//'.bin')
+                        end do
+                    end if
 
                 end if
 

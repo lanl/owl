@@ -1,5 +1,5 @@
 !
-! © 2025. Triad National Security, LLC. All rights reserved.
+! © 2025-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -32,8 +32,8 @@ contains
 
         class(wave_solver_acoustic_iso_3d), intent(inout) :: this
 
-        integer :: i, j, k, l, t, ir, irx, iry, irz, rgx, rgy, rgz
-        real :: wmin, wmax
+        integer :: i, j, k, l, t, ir, irx, iry, irz, rgx, rgy, rgz, kr
+        real :: wmin, wmax, sr
         logical :: wnan
 
         ! Prepare modeling
@@ -64,20 +64,29 @@ contains
                 end if
             end if
 
-            ! Compute seismic data; each block sums only the stencil points it holds,
-            ! and collect_group sums the partial traces over the shot group
-            !$omp parallel do private(ir, irx, iry, irz, rgx, rgy, rgz)
+            ! Compute seismic data; each block sums only the stencil points it holds, and
+            ! collect_group sums the partial traces over the shot group. With a free surface
+            ! (p = 0 on row 1), the interpolation points above it take the pressure mirrored
+            ! about it, p(1 - k) = -p(1 + k), read from the rows below the surface (the rows
+            ! above it are the halo of the top block)
+            !$omp parallel do private(ir, irx, iry, irz, rgx, rgy, rgz, kr, sr)
             do ir = 1, sgmtr%nr
                 rgx = sgmtr%recr(ir)%gx
                 rgy = sgmtr%recr(ir)%gy
                 rgz = sgmtr%recr(ir)%gz
                 if (sgmtr%recr(ir)%weight /= 0) then
                     do irz = -nkw, nkw
+                        kr = rgz + irz
+                        sr = 1.0
+                        if (yn_free_surface .and. kr < 1) then
+                            kr = 2 - kr
+                            sr = -1.0
+                        end if
                         do iry = -nkw, nkw
                             do irx = -nkw, nkw
-                                if (is_in_block(rgx + irx, rgy + iry, rgz + irz)) then
+                                if (is_in_block(rgx + irx, rgy + iry, kr)) then
                                     this%seis_p%trace(ir)%data(t) = this%seis_p%trace(ir)%data(t) &
-                                        + p(rgx + irx, rgy + iry, rgz + irz) &
+                                        + sr*p(rgx + irx, rgy + iry, kr) &
                                         *sgmtr%recr(ir)%interp_ix(irx) &
                                         *sgmtr%recr(ir)%interp_iy(iry) &
                                         *sgmtr%recr(ir)%interp_iz(irz) &

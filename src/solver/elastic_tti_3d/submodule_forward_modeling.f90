@@ -1,5 +1,5 @@
 !
-! © 2025. Triad National Security, LLC. All rights reserved.
+! © 2025-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -33,7 +33,7 @@ contains
 
         class(wave_solver_elastic_tti_3d), intent(inout) :: this
 
-        integer :: l, ir, irx, iry, irz, rgx, rgy, rgz
+        integer :: l, ir, irx, iry, irz, rgx, rgy, rgz, kr
         integer :: i, j, k, t
         real :: wmin1, wmin2, wmin3
         real :: wmax1, wmax2, wmax3
@@ -70,33 +70,11 @@ contains
                 end if
             end if
 
-            if (yn_free_surface) then
-
-                !$omp parallel do private(k) schedule(auto)
-                do k = 1, nkw
-                    if (1 - k >= nz1 .and. 1 - k <= nz2 .and. 1 + k >= nz1 - nkw + 1 .and. 1 + k <= nz2 + nkw) then
-                        vx_hxiyiz(:, :, 1 - k) = vx_hxiyiz(:, :, 1 + k)
-                        vy_hxiyiz(:, :, 1 - k) = vy_hxiyiz(:, :, 1 + k)
-                        vz_hxiyiz(:, :, 1 - k) = vz_hxiyiz(:, :, 1 + k)
-                        vx_ixhyiz(:, :, 1 - k) = vx_ixhyiz(:, :, 1 + k)
-                        vy_ixhyiz(:, :, 1 - k) = vy_ixhyiz(:, :, 1 + k)
-                        vz_ixhyiz(:, :, 1 - k) = vz_ixhyiz(:, :, 1 + k)
-                    end if
-                    if (2 - k >= nz1 .and. 2 - k <= nz2 .and. 1 + k >= nz1 - nkw + 1 .and. 1 + k <= nz2 + nkw) then
-                        vx_ixiyhz(:, :, 2 - k) = vx_ixiyhz(:, :, 1 + k)
-                        vy_ixiyhz(:, :, 2 - k) = vy_ixiyhz(:, :, 1 + k)
-                        vz_ixiyhz(:, :, 2 - k) = vz_ixiyhz(:, :, 1 + k)
-                        vx_hxhyhz(:, :, 2 - k) = vx_hxhyhz(:, :, 1 + k)
-                        vy_hxhyhz(:, :, 2 - k) = vy_hxhyhz(:, :, 1 + k)
-                        vz_hxhyhz(:, :, 2 - k) = vz_hxhyhz(:, :, 1 + k)
-                    end if
-                end do
-                !$omp end parallel do
-
-            end if
-
-            ! Record seismogram
-            !$omp parallel do private(ir, irx, iry, irz, rgx, rgy, rgz, amp1, amp2, amp3, amp4) schedule(auto)
+            ! Record seismogram. With a free surface, the interpolation points above it take the
+            ! velocities mirrored about it, v(1 - k) = v(1 + k) on the integer-z sets and
+            ! v(2 - k) = v(1 + k) on the half-z sets, read from the rows below the surface (those
+            ! above it are the halo of the top block)
+            !$omp parallel do private(ir, irx, iry, irz, rgx, rgy, rgz, kr, amp1, amp2, amp3, amp4) schedule(auto)
             do ir = 1, sgmtr%nr
                 if (sgmtr%recr(ir)%weight /= 0) then
 
@@ -105,10 +83,14 @@ contains
                     rgy = sgmtr%recr(ir)%gy
                     rgz = sgmtr%recr(ir)%gz
                     do irz = -nkw, nkw
+                        kr = rgz + irz
+                        if (yn_free_surface .and. kr < 1) then
+                            kr = 2 - kr
+                        end if
                         do iry = -nkw, nkw
                             do irx = -nkw, nkw
 
-                                if (is_in_block(rgx + irx, rgy + iry, rgz + irz)) then
+                                if (is_in_block(rgx + irx, rgy + iry, kr)) then
 
                                     amp1 = sgmtr%recr(ir)%interp_hx(irx) &
                                         *sgmtr%recr(ir)%interp_iy(iry) &
@@ -117,13 +99,13 @@ contains
 
                                     seis_vx(t, ir) = &
                                         seis_vx(t, ir) &
-                                        + vx_hxiyiz(rgx + irx, rgy + iry, rgz + irz)*amp1
+                                        + vx_hxiyiz(rgx + irx, rgy + iry, kr)*amp1
                                     seis_vy(t, ir) = &
                                         seis_vy(t, ir) &
-                                        + vy_hxiyiz(rgx + irx, rgy + iry, rgz + irz)*amp1
+                                        + vy_hxiyiz(rgx + irx, rgy + iry, kr)*amp1
                                     seis_vz(t, ir) = &
                                         seis_vz(t, ir) &
-                                        + vz_hxiyiz(rgx + irx, rgy + iry, rgz + irz)*amp1
+                                        + vz_hxiyiz(rgx + irx, rgy + iry, kr)*amp1
 
                                 end if
 
@@ -136,10 +118,14 @@ contains
                     rgy = sgmtr%recr(ir)%hy
                     rgz = sgmtr%recr(ir)%gz
                     do irz = -nkw, nkw
+                        kr = rgz + irz
+                        if (yn_free_surface .and. kr < 1) then
+                            kr = 2 - kr
+                        end if
                         do iry = -nkw, nkw
                             do irx = -nkw, nkw
 
-                                if (is_in_block(rgx + irx, rgy + iry, rgz + irz)) then
+                                if (is_in_block(rgx + irx, rgy + iry, kr)) then
 
                                     amp2 = sgmtr%recr(ir)%interp_ix(irx) &
                                         *sgmtr%recr(ir)%interp_hy(iry) &
@@ -148,13 +134,13 @@ contains
 
                                     seis_vx(t, ir) = &
                                         seis_vx(t, ir) &
-                                        + vx_ixhyiz(rgx + irx, rgy + iry, rgz + irz)*amp2
+                                        + vx_ixhyiz(rgx + irx, rgy + iry, kr)*amp2
                                     seis_vy(t, ir) = &
                                         seis_vy(t, ir) &
-                                        + vy_ixhyiz(rgx + irx, rgy + iry, rgz + irz)*amp2
+                                        + vy_ixhyiz(rgx + irx, rgy + iry, kr)*amp2
                                     seis_vz(t, ir) = &
                                         seis_vz(t, ir) &
-                                        + vz_ixhyiz(rgx + irx, rgy + iry, rgz + irz)*amp2
+                                        + vz_ixhyiz(rgx + irx, rgy + iry, kr)*amp2
                                 end if
 
                             end do
@@ -166,10 +152,14 @@ contains
                     rgy = sgmtr%recr(ir)%gy
                     rgz = sgmtr%recr(ir)%hz
                     do irz = -nkw, nkw
+                        kr = rgz + irz
+                        if (yn_free_surface .and. kr < 2) then
+                            kr = 3 - kr
+                        end if
                         do iry = -nkw, nkw
                             do irx = -nkw, nkw
 
-                                if (is_in_block(rgx + irx, rgy + iry, rgz + irz)) then
+                                if (is_in_block(rgx + irx, rgy + iry, kr)) then
 
                                     amp3 = sgmtr%recr(ir)%interp_ix(irx) &
                                         *sgmtr%recr(ir)%interp_iy(iry) &
@@ -178,13 +168,13 @@ contains
 
                                     seis_vx(t, ir) = &
                                         seis_vx(t, ir) &
-                                        + vx_ixiyhz(rgx + irx, rgy + iry, rgz + irz)*amp3
+                                        + vx_ixiyhz(rgx + irx, rgy + iry, kr)*amp3
                                     seis_vy(t, ir) = &
                                         seis_vy(t, ir) &
-                                        + vy_ixiyhz(rgx + irx, rgy + iry, rgz + irz)*amp3
+                                        + vy_ixiyhz(rgx + irx, rgy + iry, kr)*amp3
                                     seis_vz(t, ir) = &
                                         seis_vz(t, ir) &
-                                        + vz_ixiyhz(rgx + irx, rgy + iry, rgz + irz)*amp3
+                                        + vz_ixiyhz(rgx + irx, rgy + iry, kr)*amp3
                                 end if
 
                             end do
@@ -196,10 +186,14 @@ contains
                     rgy = sgmtr%recr(ir)%hy
                     rgz = sgmtr%recr(ir)%hz
                     do irz = -nkw, nkw
+                        kr = rgz + irz
+                        if (yn_free_surface .and. kr < 2) then
+                            kr = 3 - kr
+                        end if
                         do iry = -nkw, nkw
                             do irx = -nkw, nkw
 
-                                if (is_in_block(rgx + irx, rgy + iry, rgz + irz)) then
+                                if (is_in_block(rgx + irx, rgy + iry, kr)) then
 
                                     amp4 = sgmtr%recr(ir)%interp_hx(irx) &
                                         *sgmtr%recr(ir)%interp_hy(iry) &
@@ -208,13 +202,13 @@ contains
 
                                     seis_vx(t, ir) = &
                                         seis_vx(t, ir) &
-                                        + vx_hxhyhz(rgx + irx, rgy + iry, rgz + irz)*amp4
+                                        + vx_hxhyhz(rgx + irx, rgy + iry, kr)*amp4
                                     seis_vy(t, ir) = &
                                         seis_vy(t, ir) &
-                                        + vy_hxhyhz(rgx + irx, rgy + iry, rgz + irz)*amp4
+                                        + vy_hxhyhz(rgx + irx, rgy + iry, kr)*amp4
                                     seis_vz(t, ir) = &
                                         seis_vz(t, ir) &
-                                        + vz_hxhyhz(rgx + irx, rgy + iry, rgz + irz)*amp4
+                                        + vz_hxhyhz(rgx + irx, rgy + iry, kr)*amp4
 
                                 end if
 

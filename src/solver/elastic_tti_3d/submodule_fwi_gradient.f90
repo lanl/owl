@@ -36,12 +36,13 @@ contains
 
         class(wave_solver_elastic_tti_3d), intent(inout) :: this
 
-        integer :: l, ir, irx, iry, irz, rgx, rgy, rgz
+        integer :: l, ir
+        integer, dimension(6) :: block
         type(grid3) :: grd
         integer :: i, j, k, t
         real, allocatable, dimension(:, :, :) :: grad
         real, allocatable, dimension(:, :) :: seis_vx, seis_vy, seis_vz
-        real :: amp1, amp2, amp3, amp4
+        real :: amp1, amp2, amp3, col
         real :: wmin1, wmin2, wmin3
         real :: wmax1, wmax2, wmax3
         logical :: wnan
@@ -809,146 +810,48 @@ contains
                     memory_pdzzzr_hxhyhz)
             end if
 
-            ! Read and add adjoint source
-            !$omp parallel private(ir, irx, iry, irz, rgx, rgy, rgz, amp1, amp2, amp3, amp4)
+            ! Add the adjoint sources: the data residuals as forces at the receivers on the four velocity
+            ! sets (the receivers average the four sets), injected as a force source (add_source: mirror
+            ! images under a free surface, cell-height scaling on the refined mesh), which makes them the
+            ! adjoint of the receiver sampling; each block adds only to the points it owns
+            block = [nx1_interior, nx2_interior, ny1_interior, ny2_interior, nz1_interior, nz2_interior]
             do ir = 1, sgmtr%nr
                 if (sgmtr%recr(ir)%weight /= 0) then
-
-                    rgx = sgmtr%recr(ir)%hx
-                    rgy = sgmtr%recr(ir)%gy
-                    rgz = sgmtr%recr(ir)%gz
-                    !$omp do collapse(3)
-                    do irz = -nkw, nkw
-                        do iry = -nkw, nkw
-                            do irx = -nkw, nkw
-
-                                if (is_in_block(rgx + irx, rgy + iry, rgz + irz) &
-                                        .and. ifelse(yn_free_surface, rgz + irz >= 2, .true.)) then
-
-                                    amp1 = sgmtr%recr(ir)%interp_hx(irx) &
-                                        *sgmtr%recr(ir)%interp_iy(iry) &
-                                        *sgmtr%recr(ir)%interp_iz(irz) &
-                                        *sgmtr%recr(ir)%weight*0.25
-
-                                    vxr_hxiyiz(rgx + irx, rgy + iry, rgz + irz) = &
-                                        vxr_hxiyiz(rgx + irx, rgy + iry, rgz + irz) &
-                                        + seis_vx(t, ir)*amp1
-                                    vyr_hxiyiz(rgx + irx, rgy + iry, rgz + irz) = &
-                                        vyr_hxiyiz(rgx + irx, rgy + iry, rgz + irz) &
-                                        + seis_vy(t, ir)*amp1
-                                    vzr_hxiyiz(rgx + irx, rgy + iry, rgz + irz) = &
-                                        vzr_hxiyiz(rgx + irx, rgy + iry, rgz + irz) &
-                                        + seis_vz(t, ir)*amp1
-
-                                end if
-
-                            end do
-                        end do
-                    end do
-                    !$omp end do
-
-                    rgx = sgmtr%recr(ir)%gx
-                    rgy = sgmtr%recr(ir)%hy
-                    rgz = sgmtr%recr(ir)%gz
-                    !$omp do collapse(3)
-                    do irz = -nkw, nkw
-                        do iry = -nkw, nkw
-                            do irx = -nkw, nkw
-
-                                if (is_in_block(rgx + irx, rgy + iry, rgz + irz) &
-                                        .and. ifelse(yn_free_surface, rgz + irz >= 2, .true.)) then
-
-                                    amp2 = sgmtr%recr(ir)%interp_ix(irx) &
-                                        *sgmtr%recr(ir)%interp_hy(iry) &
-                                        *sgmtr%recr(ir)%interp_iz(irz) &
-                                        *sgmtr%recr(ir)%weight*0.25
-
-                                    vxr_ixhyiz(rgx + irx, rgy + iry, rgz + irz) = &
-                                        vxr_ixhyiz(rgx + irx, rgy + iry, rgz + irz) &
-                                        + seis_vx(t, ir)*amp2
-                                    vyr_ixhyiz(rgx + irx, rgy + iry, rgz + irz) = &
-                                        vyr_ixhyiz(rgx + irx, rgy + iry, rgz + irz) &
-                                        + seis_vy(t, ir)*amp2
-                                    vzr_ixhyiz(rgx + irx, rgy + iry, rgz + irz) = &
-                                        vzr_ixhyiz(rgx + irx, rgy + iry, rgz + irz) &
-                                        + seis_vz(t, ir)*amp2
-
-                                end if
-
-                            end do
-                        end do
-                    end do
-                    !$omp end do
-
-                    rgx = sgmtr%recr(ir)%gx
-                    rgy = sgmtr%recr(ir)%gy
-                    rgz = sgmtr%recr(ir)%hz
-                    !$omp do collapse(3)
-                    do irz = -nkw, nkw
-                        do iry = -nkw, nkw
-                            do irx = -nkw, nkw
-
-                                if (is_in_block(rgx + irx, rgy + iry, rgz + irz) &
-                                        .and. ifelse(yn_free_surface, rgz + irz >= 2, .true.)) then
-
-                                    amp3 = sgmtr%recr(ir)%interp_ix(irx) &
-                                        *sgmtr%recr(ir)%interp_iy(iry) &
-                                        *sgmtr%recr(ir)%interp_hz(irz) &
-                                        *sgmtr%recr(ir)%weight*0.25
-
-                                    vxr_ixiyhz(rgx + irx, rgy + iry, rgz + irz) = &
-                                        vxr_ixiyhz(rgx + irx, rgy + iry, rgz + irz) &
-                                        + seis_vx(t, ir)*amp3
-                                    vyr_ixiyhz(rgx + irx, rgy + iry, rgz + irz) = &
-                                        vyr_ixiyhz(rgx + irx, rgy + iry, rgz + irz) &
-                                        + seis_vy(t, ir)*amp3
-                                    vzr_ixiyhz(rgx + irx, rgy + iry, rgz + irz) = &
-                                        vzr_ixiyhz(rgx + irx, rgy + iry, rgz + irz) &
-                                        + seis_vz(t, ir)*amp3
-
-                                end if
-
-                            end do
-                        end do
-                    end do
-                    !$omp end do
-
-                    rgx = sgmtr%recr(ir)%hx
-                    rgy = sgmtr%recr(ir)%hy
-                    rgz = sgmtr%recr(ir)%hz
-                    !$omp do collapse(3)
-                    do irz = -nkw, nkw
-                        do iry = -nkw, nkw
-                            do irx = -nkw, nkw
-
-                                if (is_in_block(rgx + irx, rgy + iry, rgz + irz) &
-                                        .and. ifelse(yn_free_surface, rgz + irz >= 2, .true.)) then
-
-                                    amp4 = sgmtr%recr(ir)%interp_hx(irx) &
-                                        *sgmtr%recr(ir)%interp_hy(iry) &
-                                        *sgmtr%recr(ir)%interp_hz(irz) &
-                                        *sgmtr%recr(ir)%weight*0.25
-
-                                    vxr_hxhyhz(rgx + irx, rgy + iry, rgz + irz) = &
-                                        vxr_hxhyhz(rgx + irx, rgy + iry, rgz + irz) &
-                                        + seis_vx(t, ir)*amp4
-                                    vyr_hxhyhz(rgx + irx, rgy + iry, rgz + irz) = &
-                                        vyr_hxhyhz(rgx + irx, rgy + iry, rgz + irz) &
-                                        + seis_vy(t, ir)*amp4
-                                    vzr_hxhyhz(rgx + irx, rgy + iry, rgz + irz) = &
-                                        vzr_hxhyhz(rgx + irx, rgy + iry, rgz + irz) &
-                                        + seis_vz(t, ir)*amp4
-
-                                end if
-
-                            end do
-                        end do
-                    end do
-                    !$omp end do
-
+                    associate (r => sgmtr%recr(ir))
+                    col = 1.0
+                    if (yn_free_surface) then
+                        col = (topo_max + depth_max)/(topo_ixiy(r%gx, r%gy) + depth_max)
+                    end if
+                    amp1 = seis_vx(t, ir)*r%weight*0.25*col
+                    amp2 = seis_vy(t, ir)*r%weight*0.25*col
+                    amp3 = seis_vz(t, ir)*r%weight*0.25*col
+                    call add_source_value_3d(vxr_hxiyiz, r%hx, r%gy, r%gz, r%interp_hx, r%interp_iy, r%interp_iz, &
+                        amp1, amp1, .false., yn_free_surface, block, eta_dz_scaling_i)
+                    call add_source_value_3d(vyr_hxiyiz, r%hx, r%gy, r%gz, r%interp_hx, r%interp_iy, r%interp_iz, &
+                        amp2, amp2, .false., yn_free_surface, block, eta_dz_scaling_i)
+                    call add_source_value_3d(vzr_hxiyiz, r%hx, r%gy, r%gz, r%interp_hx, r%interp_iy, r%interp_iz, &
+                        amp3, amp3, .false., yn_free_surface, block, eta_dz_scaling_i)
+                    call add_source_value_3d(vxr_ixhyiz, r%gx, r%hy, r%gz, r%interp_ix, r%interp_hy, r%interp_iz, &
+                        amp1, amp1, .false., yn_free_surface, block, eta_dz_scaling_i)
+                    call add_source_value_3d(vyr_ixhyiz, r%gx, r%hy, r%gz, r%interp_ix, r%interp_hy, r%interp_iz, &
+                        amp2, amp2, .false., yn_free_surface, block, eta_dz_scaling_i)
+                    call add_source_value_3d(vzr_ixhyiz, r%gx, r%hy, r%gz, r%interp_ix, r%interp_hy, r%interp_iz, &
+                        amp3, amp3, .false., yn_free_surface, block, eta_dz_scaling_i)
+                    call add_source_value_3d(vxr_ixiyhz, r%gx, r%gy, r%hz, r%interp_ix, r%interp_iy, r%interp_hz, &
+                        amp1, amp1, .true., yn_free_surface, block, eta_dz_scaling_h)
+                    call add_source_value_3d(vyr_ixiyhz, r%gx, r%gy, r%hz, r%interp_ix, r%interp_iy, r%interp_hz, &
+                        amp2, amp2, .true., yn_free_surface, block, eta_dz_scaling_h)
+                    call add_source_value_3d(vzr_ixiyhz, r%gx, r%gy, r%hz, r%interp_ix, r%interp_iy, r%interp_hz, &
+                        amp3, amp3, .true., yn_free_surface, block, eta_dz_scaling_h)
+                    call add_source_value_3d(vxr_hxhyhz, r%hx, r%hy, r%hz, r%interp_hx, r%interp_hy, r%interp_hz, &
+                        amp1, amp1, .true., yn_free_surface, block, eta_dz_scaling_h)
+                    call add_source_value_3d(vyr_hxhyhz, r%hx, r%hy, r%hz, r%interp_hx, r%interp_hy, r%interp_hz, &
+                        amp2, amp2, .true., yn_free_surface, block, eta_dz_scaling_h)
+                    call add_source_value_3d(vzr_hxhyhz, r%hx, r%hy, r%hz, r%interp_hx, r%interp_hy, r%interp_hz, &
+                        amp3, amp3, .true., yn_free_surface, block, eta_dz_scaling_h)
+                    end associate
                 end if
             end do
-            !$omp end parallel
 
             ! Compute gradients
             if (mod(t, cc_step_interval) == 0) then
@@ -1069,7 +972,8 @@ contains
 
             energy_src_v = energy_src_v + 1.0e-3*maxval(energy_src_v)
             energy_rec_v = energy_rec_v + 1.0e-3*maxval(energy_rec_v)
-            energy_src_v = sqrt(energy_src_v*energy_rec_v)
+            ! The product of two small energies can underflow in single precision
+            energy_src_v = sqrt(energy_src_v)*sqrt(energy_rec_v)
             grad_c11 = grad_c11/energy_src_v
             grad_c12 = grad_c12/energy_src_v
             grad_c13 = grad_c13/energy_src_v
@@ -1094,7 +998,7 @@ contains
 
             energy_src_a = energy_src_a + 1.0e-3*maxval(energy_src_a)
             energy_rec_a = energy_rec_a + 1.0e-3*maxval(energy_rec_a)
-            energy_src_a = sqrt(energy_src_a*energy_rec_a)
+            energy_src_a = sqrt(energy_src_a)*sqrt(energy_rec_a)
             grad_rho = grad_rho/energy_src_a
 
         end if
@@ -1134,12 +1038,10 @@ contains
 
             call grd%init(n=[nz, ny, nx], d=[dz, dy, dx], o=[oz, oy, ox])
 
-            if (yn_free_surface) then
-                rho = rho*1.0e-3
-                call map_irregular_to_regular(rho, this, [1, nx, 1, ny, 1, nz])
-            else
-                rho = permute(this%rho, 321)*1.0e-3
-            end if
+            ! The chain rule below needs the density on the regular mesh of the gradients, which is the
+            ! input model. (Mapping rho back from the depth-varying mesh would not do: rho holds only
+            ! the block of this rank, so the rest of the model would get no density.)
+            rho = permute(this%rho, 321)*1.0e-3
 
             select case (aniso_param)
 
@@ -1789,189 +1691,109 @@ contains
     end subroutine
 
     !
-    !> Compute source parameter gradients
+    !> Compute source parameter gradients: the transpose of the moment-tensor injection of add_source.
+    !> add_source adds m = (mxx, myy, mzz, myz, mxz, mxy), scaled, at the source points (sums v(1, :)
+    !> below) of the four stress sets and, with a free surface, its image 2*surface_moment(m) - m = b m
+    !> at the mirror points (sums v(2, :)), so the gradient with respect to m is v(1, :) + b^T v(2, :).
+    !> The sums of this rank are reduced over the ranks after the time loop; grad_mt is ordered
+    !> (xx, yy, zz, xy, xz, yz).
     !
     subroutine compute_gradient_source(t)
 
         integer, intent(in) :: t
 
-        integer :: sgx, sgy, sgz, irx, iry, irz
-        integer :: i
+        integer :: i, d
+        integer, dimension(6) :: block
+        real :: col
+        real, dimension(6) :: e, g
+        real, dimension(6, 6) :: b
+        real, dimension(2, 6) :: v
+
+        block = [nx1_interior, nx2_interior, ny1_interior, ny2_interior, nz1_interior, nz2_interior]
 
         do i = 1, sgmtr%ns
 
-            sgx = sgmtr%srcr(i)%gx
-            sgy = sgmtr%srcr(i)%gy
-            sgz = sgmtr%srcr(i)%gz
+            associate (s => sgmtr%srcr(i))
 
-            do irz = -nkw, nkw
-                do iry = -nkw, nkw
-                    do irx = -nkw, nkw
-                        if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                            ! ix-iy-iz
-                            grad_mt(1) = grad_mt(1) - &
-                                stressxxr_ixiyiz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_ix(irx) &
-                                *sgmtr%srcr(i)%interp_iy(iry) &
-                                *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
-                            grad_mt(2) = grad_mt(2) - &
-                                stressyyr_ixiyiz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_ix(irx) &
-                                *sgmtr%srcr(i)%interp_iy(iry) &
-                                *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
-                            grad_mt(3) = grad_mt(3) - &
-                                stresszzr_ixiyiz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_ix(irx) &
-                                *sgmtr%srcr(i)%interp_iy(iry) &
-                                *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
-                            grad_mt(4) = grad_mt(4) - &
-                                stressxyr_ixiyiz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_ix(irx) &
-                                *sgmtr%srcr(i)%interp_iy(iry) &
-                                *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
-                            grad_mt(5) = grad_mt(5) - &
-                                stressxzr_ixiyiz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_ix(irx) &
-                                *sgmtr%srcr(i)%interp_iy(iry) &
-                                *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
-                            grad_mt(6) = grad_mt(6) - &
-                                stressyzr_ixiyiz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_ix(irx) &
-                                *sgmtr%srcr(i)%interp_iy(iry) &
-                                *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
-                        end if
+            ! Images of the unit moment tensors (columns of b), computed on the rank owning the
+            ! surface point above the source
+            b = 0
+            if (yn_free_surface) then
+                if (is_in_block(s%gx, s%gy, 1)) then
+                    do d = 1, 6
+                        e = 0
+                        e(d) = 1.0
+                        b(:, d) = 2.0*surface_moment(s%gx, s%gy, e) - e
                     end do
-                end do
-            end do
+                end if
+                call allreduce_array_group(b)
+            end if
 
-            sgx = sgmtr%srcr(i)%hx
-            sgy = sgmtr%srcr(i)%hy
-            sgz = sgmtr%srcr(i)%gz
-            do irz = -nkw, nkw
-                do iry = -nkw, nkw
-                    do irx = -nkw, nkw
-                        if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                            ! hx-hy-iz
-                            grad_mt(1) = grad_mt(1) - &
-                                stressxxr_hxhyiz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_hx(irx) &
-                                *sgmtr%srcr(i)%interp_hy(iry) &
-                                *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
-                            grad_mt(2) = grad_mt(2) - &
-                                stressyyr_hxhyiz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_hx(irx) &
-                                *sgmtr%srcr(i)%interp_hy(iry) &
-                                *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
-                            grad_mt(3) = grad_mt(3) - &
-                                stresszzr_hxhyiz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_hx(irx) &
-                                *sgmtr%srcr(i)%interp_hy(iry) &
-                                *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
-                            grad_mt(4) = grad_mt(4) - &
-                                stressxyr_hxhyiz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_hx(irx) &
-                                *sgmtr%srcr(i)%interp_hy(iry) &
-                                *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
-                            grad_mt(5) = grad_mt(5) - &
-                                stressxzr_hxhyiz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_hx(irx) &
-                                *sgmtr%srcr(i)%interp_hy(iry) &
-                                *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
-                            grad_mt(6) = grad_mt(6) - &
-                                stressyzr_hxhyiz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_hx(irx) &
-                                *sgmtr%srcr(i)%interp_hy(iry) &
-                                *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
-                        end if
-                    end do
-                end do
-            end do
+            v(:, 1) = source_value_3d(stressxxr_ixiyiz, s%gx, s%gy, s%gz, s%interp_ix, s%interp_iy, s%interp_iz, &
+                    .false., yn_free_surface, block, eta_dz_scaling_i) &
+                + source_value_3d(stressxxr_hxhyiz, s%hx, s%hy, s%gz, s%interp_hx, s%interp_hy, s%interp_iz, &
+                    .false., yn_free_surface, block, eta_dz_scaling_i) &
+                + source_value_3d(stressxxr_hxiyhz, s%hx, s%gy, s%hz, s%interp_hx, s%interp_iy, s%interp_hz, &
+                    .true., yn_free_surface, block, eta_dz_scaling_h) &
+                + source_value_3d(stressxxr_ixhyhz, s%gx, s%hy, s%hz, s%interp_ix, s%interp_hy, s%interp_hz, &
+                    .true., yn_free_surface, block, eta_dz_scaling_h)
+            v(:, 2) = source_value_3d(stressyyr_ixiyiz, s%gx, s%gy, s%gz, s%interp_ix, s%interp_iy, s%interp_iz, &
+                    .false., yn_free_surface, block, eta_dz_scaling_i) &
+                + source_value_3d(stressyyr_hxhyiz, s%hx, s%hy, s%gz, s%interp_hx, s%interp_hy, s%interp_iz, &
+                    .false., yn_free_surface, block, eta_dz_scaling_i) &
+                + source_value_3d(stressyyr_hxiyhz, s%hx, s%gy, s%hz, s%interp_hx, s%interp_iy, s%interp_hz, &
+                    .true., yn_free_surface, block, eta_dz_scaling_h) &
+                + source_value_3d(stressyyr_ixhyhz, s%gx, s%hy, s%hz, s%interp_ix, s%interp_hy, s%interp_hz, &
+                    .true., yn_free_surface, block, eta_dz_scaling_h)
+            v(:, 3) = source_value_3d(stresszzr_ixiyiz, s%gx, s%gy, s%gz, s%interp_ix, s%interp_iy, s%interp_iz, &
+                    .false., yn_free_surface, block, eta_dz_scaling_i) &
+                + source_value_3d(stresszzr_hxhyiz, s%hx, s%hy, s%gz, s%interp_hx, s%interp_hy, s%interp_iz, &
+                    .false., yn_free_surface, block, eta_dz_scaling_i) &
+                + source_value_3d(stresszzr_hxiyhz, s%hx, s%gy, s%hz, s%interp_hx, s%interp_iy, s%interp_hz, &
+                    .true., yn_free_surface, block, eta_dz_scaling_h) &
+                + source_value_3d(stresszzr_ixhyhz, s%gx, s%hy, s%hz, s%interp_ix, s%interp_hy, s%interp_hz, &
+                    .true., yn_free_surface, block, eta_dz_scaling_h)
+            v(:, 4) = source_value_3d(stressyzr_ixiyiz, s%gx, s%gy, s%gz, s%interp_ix, s%interp_iy, s%interp_iz, &
+                    .false., yn_free_surface, block, eta_dz_scaling_i) &
+                + source_value_3d(stressyzr_hxhyiz, s%hx, s%hy, s%gz, s%interp_hx, s%interp_hy, s%interp_iz, &
+                    .false., yn_free_surface, block, eta_dz_scaling_i) &
+                + source_value_3d(stressyzr_hxiyhz, s%hx, s%gy, s%hz, s%interp_hx, s%interp_iy, s%interp_hz, &
+                    .true., yn_free_surface, block, eta_dz_scaling_h) &
+                + source_value_3d(stressyzr_ixhyhz, s%gx, s%hy, s%hz, s%interp_ix, s%interp_hy, s%interp_hz, &
+                    .true., yn_free_surface, block, eta_dz_scaling_h)
+            v(:, 5) = source_value_3d(stressxzr_ixiyiz, s%gx, s%gy, s%gz, s%interp_ix, s%interp_iy, s%interp_iz, &
+                    .false., yn_free_surface, block, eta_dz_scaling_i) &
+                + source_value_3d(stressxzr_hxhyiz, s%hx, s%hy, s%gz, s%interp_hx, s%interp_hy, s%interp_iz, &
+                    .false., yn_free_surface, block, eta_dz_scaling_i) &
+                + source_value_3d(stressxzr_hxiyhz, s%hx, s%gy, s%hz, s%interp_hx, s%interp_iy, s%interp_hz, &
+                    .true., yn_free_surface, block, eta_dz_scaling_h) &
+                + source_value_3d(stressxzr_ixhyhz, s%gx, s%hy, s%hz, s%interp_ix, s%interp_hy, s%interp_hz, &
+                    .true., yn_free_surface, block, eta_dz_scaling_h)
+            v(:, 6) = source_value_3d(stressxyr_ixiyiz, s%gx, s%gy, s%gz, s%interp_ix, s%interp_iy, s%interp_iz, &
+                    .false., yn_free_surface, block, eta_dz_scaling_i) &
+                + source_value_3d(stressxyr_hxhyiz, s%hx, s%hy, s%gz, s%interp_hx, s%interp_hy, s%interp_iz, &
+                    .false., yn_free_surface, block, eta_dz_scaling_i) &
+                + source_value_3d(stressxyr_hxiyhz, s%hx, s%gy, s%hz, s%interp_hx, s%interp_iy, s%interp_hz, &
+                    .true., yn_free_surface, block, eta_dz_scaling_h) &
+                + source_value_3d(stressxyr_ixhyhz, s%gx, s%hy, s%hz, s%interp_ix, s%interp_hy, s%interp_hz, &
+                    .true., yn_free_surface, block, eta_dz_scaling_h)
 
-            sgx = sgmtr%srcr(i)%hx
-            sgy = sgmtr%srcr(i)%gy
-            sgz = sgmtr%srcr(i)%hz
-            do irz = -nkw, nkw
-                do iry = -nkw, nkw
-                    do irx = -nkw, nkw
-                        if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                            ! hx-iy-hz
-                            grad_mt(1) = grad_mt(1) - &
-                                stressxxr_hxiyhz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_hx(irx) &
-                                *sgmtr%srcr(i)%interp_iy(iry) &
-                                *sgmtr%srcr(i)%interp_hz(irz)*dstf_dt(t, i)
-                            grad_mt(2) = grad_mt(2) - &
-                                stressyyr_hxiyhz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_hx(irx) &
-                                *sgmtr%srcr(i)%interp_iy(iry) &
-                                *sgmtr%srcr(i)%interp_hz(irz)*dstf_dt(t, i)
-                            grad_mt(3) = grad_mt(3) - &
-                                stresszzr_hxiyhz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_hx(irx) &
-                                *sgmtr%srcr(i)%interp_iy(iry) &
-                                *sgmtr%srcr(i)%interp_hz(irz)*dstf_dt(t, i)
-                            grad_mt(4) = grad_mt(4) - &
-                                stressxyr_hxiyhz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_hx(irx) &
-                                *sgmtr%srcr(i)%interp_iy(iry) &
-                                *sgmtr%srcr(i)%interp_hz(irz)*dstf_dt(t, i)
-                            grad_mt(5) = grad_mt(5) - &
-                                stressxzr_hxiyhz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_hx(irx) &
-                                *sgmtr%srcr(i)%interp_iy(iry) &
-                                *sgmtr%srcr(i)%interp_hz(irz)*dstf_dt(t, i)
-                            grad_mt(6) = grad_mt(6) - &
-                                stressyzr_hxiyhz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_hx(irx) &
-                                *sgmtr%srcr(i)%interp_iy(iry) &
-                                *sgmtr%srcr(i)%interp_hz(irz)*dstf_dt(t, i)
-                        end if
-                    end do
-                end do
-            end do
+            ! Per-source factor of the moment density in add_source; the nominal cell size, common
+            ! to all sources, is left out
+            col = 1.0
+            if (yn_free_surface) then
+                col = (topo_max + depth_max)/(topo_ixiy(s%gx, s%gy) + depth_max)
+            end if
+            g = col*(v(1, :) + matmul(transpose(b), v(2, :)))
 
-            sgx = sgmtr%srcr(i)%gx
-            sgy = sgmtr%srcr(i)%hy
-            sgz = sgmtr%srcr(i)%hz
-            do irz = -nkw, nkw
-                do iry = -nkw, nkw
-                    do irx = -nkw, nkw
-                        if (is_in_block(sgx + irx, sgy + iry, sgz + irz) .and. ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                            ! ix-hy-hz
-                            grad_mt(1) = grad_mt(1) - &
-                                stressxxr_ixhyhz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_ix(irx) &
-                                *sgmtr%srcr(i)%interp_hy(iry) &
-                                *sgmtr%srcr(i)%interp_hz(irz)*dstf_dt(t, i)
-                            grad_mt(2) = grad_mt(2) - &
-                                stressyyr_ixhyhz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_ix(irx) &
-                                *sgmtr%srcr(i)%interp_hy(iry) &
-                                *sgmtr%srcr(i)%interp_hz(irz)*dstf_dt(t, i)
-                            grad_mt(3) = grad_mt(3) - &
-                                stresszzr_ixhyhz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_ix(irx) &
-                                *sgmtr%srcr(i)%interp_hy(iry) &
-                                *sgmtr%srcr(i)%interp_hz(irz)*dstf_dt(t, i)
-                            grad_mt(4) = grad_mt(4) - &
-                                stressxyr_ixhyhz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_ix(irx) &
-                                *sgmtr%srcr(i)%interp_hy(iry) &
-                                *sgmtr%srcr(i)%interp_hz(irz)*dstf_dt(t, i)
-                            grad_mt(5) = grad_mt(5) - &
-                                stressxzr_ixhyhz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_ix(irx) &
-                                *sgmtr%srcr(i)%interp_hy(iry) &
-                                *sgmtr%srcr(i)%interp_hz(irz)*dstf_dt(t, i)
-                            grad_mt(6) = grad_mt(6) - &
-                                stressyzr_ixhyhz(sgx + irx, sgy + iry, sgz + irz) &
-                                *sgmtr%srcr(i)%interp_ix(irx) &
-                                *sgmtr%srcr(i)%interp_hy(iry) &
-                                *sgmtr%srcr(i)%interp_hz(irz)*dstf_dt(t, i)
-                        end if
-                    end do
-                end do
-            end do
+            grad_mt(1) = grad_mt(1) - g(1)*dstf_dt(t, i)
+            grad_mt(2) = grad_mt(2) - g(2)*dstf_dt(t, i)
+            grad_mt(3) = grad_mt(3) - g(3)*dstf_dt(t, i)
+            grad_mt(4) = grad_mt(4) - g(6)*dstf_dt(t, i)
+            grad_mt(5) = grad_mt(5) - g(5)*dstf_dt(t, i)
+            grad_mt(6) = grad_mt(6) - g(4)*dstf_dt(t, i)
+
+            end associate
 
         end do
 

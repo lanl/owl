@@ -35,7 +35,8 @@ contains
 
         class(wave_solver_elastic_vhtiort_2d), intent(inout) :: this
 
-        integer :: l, ir, irx, irz, rgx, rgz
+        integer :: l, ir
+        real :: amp
         type(grid2) :: grd
         integer :: i, j, t
 
@@ -207,56 +208,26 @@ contains
                     memory_pdxxxr, memory_pdzxzr, memory_pdxxzr, memory_pdzzzr)
             end if
 
-            ! Read and add adjoint source
-            !$omp parallel private(ir, irx, irz, rgx, rgz)
+            ! Add the adjoint sources: the data residuals as forces at the receivers, injected as a
+            ! force source (add_source: mirror images under a free surface, cell-height scaling on the
+            ! refined mesh), which makes them the adjoint of the receiver sampling. Adjacent receivers
+            ! may add to the same grid points, hence the serial loop over receivers.
             do ir = 1, sgmtr%nr
                 if (sgmtr%recr(ir)%weight /= 0) then
-
                     if (yn_compx) then
-
-                        rgx = sgmtr%recr(ir)%hx
-                        rgz = sgmtr%recr(ir)%gz
-
-                        !$omp do collapse(2)
-                        do irz = -nkw, nkw
-                            do irx = -nkw, nkw
-                                if (ifelse(yn_free_surface, rgz + irz >= 2, .true.)) then
-                                    vxr(rgx + irx, rgz + irz) = vxr(rgx + irx, rgz + irz) &
-                                        + this%seis_vxr%trace(ir)%data(t) &
-                                        *sgmtr%recr(ir)%interp_hx(irx) &
-                                        *sgmtr%recr(ir)%interp_iz(irz) &
-                                        *sgmtr%recr(ir)%weight
-                                end if
-                            end do
-                        end do
-                        !$omp end do
-
+                        amp = this%seis_vxr%trace(ir)%data(t)*sgmtr%recr(ir)%weight
+                        call add_source_value_2d(vxr, sgmtr%recr(ir)%hx, sgmtr%recr(ir)%gz, &
+                            sgmtr%recr(ir)%interp_hx, sgmtr%recr(ir)%interp_iz, amp, amp, .false., yn_free_surface, &
+                            dz_scaling_i)
                     end if
-
                     if (yn_compz) then
-
-                        rgx = sgmtr%recr(ir)%gx
-                        rgz = sgmtr%recr(ir)%hz
-
-                        !$omp do collapse(2)
-                        do irz = -nkw, nkw
-                            do irx = -nkw, nkw
-                                if (ifelse(yn_free_surface, rgz + irz >= 2, .true.)) then
-                                    vzr(rgx + irx, rgz + irz) = vzr(rgx + irx, rgz + irz) &
-                                        + this%seis_vzr%trace(ir)%data(t) &
-                                        *sgmtr%recr(ir)%interp_ix(irx) &
-                                        *sgmtr%recr(ir)%interp_hz(irz) &
-                                        *sgmtr%recr(ir)%weight
-                                end if
-                            end do
-                        end do
-                        !$omp end do
-
+                        amp = this%seis_vzr%trace(ir)%data(t)*sgmtr%recr(ir)%weight
+                        call add_source_value_2d(vzr, sgmtr%recr(ir)%gx, sgmtr%recr(ir)%hz, &
+                            sgmtr%recr(ir)%interp_ix, sgmtr%recr(ir)%interp_hz, amp, amp, .true., yn_free_surface, &
+                            dz_scaling_h)
                     end if
-
                 end if
             end do
-            !$omp end parallel
 
             ! Compute gradients
             if (mod(t, cc_step_interval) == 0) then
@@ -304,7 +275,8 @@ contains
 
             energy_src_v = energy_src_v + 1.0e-3*maxval(energy_src_v)
             energy_rec_v = energy_rec_v + 1.0e-3*maxval(energy_rec_v)
-            energy_src_v = sqrt(energy_src_v*energy_rec_v)
+            ! The product of two small energies can underflow in single precision
+            energy_src_v = sqrt(energy_src_v)*sqrt(energy_rec_v)
             grad_c11 = grad_c11/energy_src_v
             grad_c13 = grad_c13/energy_src_v
             grad_c33 = grad_c33/energy_src_v
@@ -312,7 +284,7 @@ contains
 
             energy_src_a = energy_src_a + 1.0e-3*maxval(energy_src_a)
             energy_rec_a = energy_rec_a + 1.0e-3*maxval(energy_rec_a)
-            energy_src_a = sqrt(energy_src_a*energy_rec_a)
+            energy_src_a = sqrt(energy_src_a)*sqrt(energy_rec_a)
             grad_rho = grad_rho/energy_src_a
 
         end if
@@ -557,45 +529,33 @@ contains
     end subroutine
 
     !
-    !> Compute source parameter gradients
+    !> Compute source parameter gradients: the transpose of the moment-tensor injection of add_source.
+    !> With a free surface, add_source adds -m*mxx and -m*(mxx - 2*c13/c33*mzz) to sxx at the source
+    !> points (sums v(1) below) and their mirror points (v(2)), -m*mzz and m*mzz to szz, and -m*mxz
+    !> and m*mxz to sxz.
     !
     subroutine compute_gradient_source(t)
 
         integer, intent(in) :: t
 
-        integer :: sgx, sgz, i, irx, irz
+        integer :: i
+        real :: r13
+        real, dimension(2) :: vxx, vzz, vxz
 
         do i = 1, sgmtr%ns
 
-            sgx = sgmtr%srcr(i)%gx
-            sgz = sgmtr%srcr(i)%gz
-            do irz = -nkw, nkw
-                do irx = -nkw, nkw
-                    if (ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                        grad_mt(1) = grad_mt(1) - &
-                            stressxxr(sgx + irx, sgz + irz) &
-                            *sgmtr%srcr(i)%interp_ix(irx) &
-                            *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
-                        grad_mt(3) = grad_mt(3) - &
-                            stresszzr(sgx + irx, sgz + irz) &
-                            *sgmtr%srcr(i)%interp_ix(irx) &
-                            *sgmtr%srcr(i)%interp_iz(irz)*dstf_dt(t, i)
-                    end if
-                end do
-            end do
+            associate (s => sgmtr%srcr(i))
 
-            sgx = sgmtr%srcr(i)%hx
-            sgz = sgmtr%srcr(i)%hz
-            do irz = -nkw, nkw
-                do irx = -nkw, nkw
-                    if (ifelse(yn_free_surface, sgz + irz >= 2, .true.)) then
-                        grad_mt(5) = grad_mt(5) - &
-                            stressxzr(sgx + irx, sgz + irz) &
-                            *sgmtr%srcr(i)%interp_hx(irx) &
-                            *sgmtr%srcr(i)%interp_hz(irz)*dstf_dt(t, i)
-                    end if
-                end do
-            end do
+            vxx = source_value_2d(stressxxr, s%gx, s%gz, s%interp_ix, s%interp_iz, .false., yn_free_surface, dz_scaling_i)
+            vzz = source_value_2d(stresszzr, s%gx, s%gz, s%interp_ix, s%interp_iz, .false., yn_free_surface, dz_scaling_i)
+            vxz = source_value_2d(stressxzr, s%hx, s%hz, s%interp_hx, s%interp_hz, .true., yn_free_surface, dz_scaling_h)
+            r13 = c13(s%gx, 1)/c33(s%gx, 1)
+
+            grad_mt(1) = grad_mt(1) - (vxx(1) + vxx(2))*dstf_dt(t, i)
+            grad_mt(3) = grad_mt(3) - (vzz(1) - vzz(2) - 2.0*r13*vxx(2))*dstf_dt(t, i)
+            grad_mt(5) = grad_mt(5) - (vxz(1) - vxz(2))*dstf_dt(t, i)
+
+            end associate
 
         end do
 
