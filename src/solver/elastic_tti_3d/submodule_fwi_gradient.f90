@@ -229,6 +229,21 @@ contains
             if (yn_update_medium .and. t >= sgmtr%srcr(1)%hnt) then
 
                 ! -------------- Wavefield reconstruction ----------------------
+                ! The velocities changed after their halo exchange; refresh the
+                ! halos that the averages below read across block faces
+                call commute_array_group(vx_hxiyiz, fdhalf)
+                call commute_array_group(vy_hxiyiz, fdhalf)
+                call commute_array_group(vz_hxiyiz, fdhalf)
+                call commute_array_group(vx_ixhyiz, fdhalf)
+                call commute_array_group(vy_ixhyiz, fdhalf)
+                call commute_array_group(vz_ixhyiz, fdhalf)
+                call commute_array_group(vx_ixiyhz, fdhalf)
+                call commute_array_group(vy_ixiyhz, fdhalf)
+                call commute_array_group(vz_ixiyhz, fdhalf)
+                call commute_array_group(vx_hxhyhz, fdhalf)
+                call commute_array_group(vy_hxhyhz, fdhalf)
+                call commute_array_group(vz_hxhyhz, fdhalf)
+
                 ! Store previous stress wavefields for cross-correlation
                 !$omp parallel do private(i, j, k) collapse(3)
                 do k = nz1, nz2
@@ -938,6 +953,32 @@ contains
             ! Compute gradients
             if (mod(t, cc_step_interval) == 0) then
                 if (yn_update_medium .and. t >= sgmtr%srcr(1)%hnt) then
+                    ! The velocities changed after their halo exchange; refresh the
+                    ! halos that compute_gradient averages across block faces
+                    call commute_array_group(vx_hxiyiz, fdhalf)
+                    call commute_array_group(vy_hxiyiz, fdhalf)
+                    call commute_array_group(vz_hxiyiz, fdhalf)
+                    call commute_array_group(vx_ixhyiz, fdhalf)
+                    call commute_array_group(vy_ixhyiz, fdhalf)
+                    call commute_array_group(vz_ixhyiz, fdhalf)
+                    call commute_array_group(vx_ixiyhz, fdhalf)
+                    call commute_array_group(vy_ixiyhz, fdhalf)
+                    call commute_array_group(vz_ixiyhz, fdhalf)
+                    call commute_array_group(vx_hxhyhz, fdhalf)
+                    call commute_array_group(vy_hxhyhz, fdhalf)
+                    call commute_array_group(vz_hxhyhz, fdhalf)
+                    call commute_array_group(vxr_hxiyiz, fdhalf)
+                    call commute_array_group(vyr_hxiyiz, fdhalf)
+                    call commute_array_group(vzr_hxiyiz, fdhalf)
+                    call commute_array_group(vxr_ixhyiz, fdhalf)
+                    call commute_array_group(vyr_ixhyiz, fdhalf)
+                    call commute_array_group(vzr_ixhyiz, fdhalf)
+                    call commute_array_group(vxr_ixiyhz, fdhalf)
+                    call commute_array_group(vyr_ixiyhz, fdhalf)
+                    call commute_array_group(vzr_ixiyhz, fdhalf)
+                    call commute_array_group(vxr_hxhyhz, fdhalf)
+                    call commute_array_group(vyr_hxhyhz, fdhalf)
+                    call commute_array_group(vzr_hxhyhz, fdhalf)
                     call compute_gradient
                 end if
                 if (yn_update_source) then
@@ -994,31 +1035,32 @@ contains
             return
         end if
 
+        ! Sum the gradient blocks over the shot group
+        call allreduce_array_group(grad_c11)
+        call allreduce_array_group(grad_c12)
+        call allreduce_array_group(grad_c13)
+        call allreduce_array_group(grad_c14)
+        call allreduce_array_group(grad_c15)
+        call allreduce_array_group(grad_c16)
+        call allreduce_array_group(grad_c22)
+        call allreduce_array_group(grad_c23)
+        call allreduce_array_group(grad_c24)
+        call allreduce_array_group(grad_c25)
+        call allreduce_array_group(grad_c26)
+        call allreduce_array_group(grad_c33)
+        call allreduce_array_group(grad_c34)
+        call allreduce_array_group(grad_c35)
+        call allreduce_array_group(grad_c36)
+        call allreduce_array_group(grad_c44)
+        call allreduce_array_group(grad_c45)
+        call allreduce_array_group(grad_c46)
+        call allreduce_array_group(grad_c55)
+        call allreduce_array_group(grad_c56)
+        call allreduce_array_group(grad_c66)
+        call allreduce_array_group(grad_rho)
+
         ! Output medium parameter gradient
         if (yn_energy_precond) then
-
-            call allreduce_array_group(grad_c11)
-            call allreduce_array_group(grad_c12)
-            call allreduce_array_group(grad_c13)
-            call allreduce_array_group(grad_c14)
-            call allreduce_array_group(grad_c15)
-            call allreduce_array_group(grad_c16)
-            call allreduce_array_group(grad_c22)
-            call allreduce_array_group(grad_c23)
-            call allreduce_array_group(grad_c24)
-            call allreduce_array_group(grad_c25)
-            call allreduce_array_group(grad_c26)
-            call allreduce_array_group(grad_c33)
-            call allreduce_array_group(grad_c34)
-            call allreduce_array_group(grad_c35)
-            call allreduce_array_group(grad_c36)
-            call allreduce_array_group(grad_c44)
-            call allreduce_array_group(grad_c45)
-            call allreduce_array_group(grad_c46)
-            call allreduce_array_group(grad_c55)
-            call allreduce_array_group(grad_c56)
-            call allreduce_array_group(grad_c66)
-            call allreduce_array_group(grad_rho)
 
             call allreduce_array_group(energy_src_v)
             call allreduce_array_group(energy_rec_v)
@@ -1084,8 +1126,8 @@ contains
                 call map_irregular_to_regular(grad_c45, this, [1, nx, 1, ny, 1, nz])
                 call map_irregular_to_regular(grad_c46, this, [1, nx, 1, ny, 1, nz])
                 call map_irregular_to_regular(grad_c55, this, [1, nx, 1, ny, 1, nz])
-                call map_irregular_to_regular(grad_c46, this, [1, nx, 1, ny, 1, nz])
                 call map_irregular_to_regular(grad_c56, this, [1, nx, 1, ny, 1, nz])
+                call map_irregular_to_regular(grad_c66, this, [1, nx, 1, ny, 1, nz])
 
                 call map_irregular_to_regular(grad_rho, this, [1, nx, 1, ny, 1, nz])
             end if

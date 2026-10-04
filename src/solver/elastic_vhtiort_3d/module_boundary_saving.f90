@@ -57,6 +57,24 @@ module elastic_vhtiort_3d_boundary_saving
 contains
 
     !
+    !> Clip the range [lo, hi] to [n1, n2]; an empty range becomes [n1, n1 - 1],
+    !> which is inside the bounds of the block arrays
+    !
+    subroutine clip_range(lo, hi, n1, n2)
+
+        integer, intent(inout) :: lo, hi
+        integer, intent(in) :: n1, n2
+
+        lo = max(lo, n1)
+        hi = min(hi, n2)
+        if (hi < lo) then
+            lo = n1
+            hi = n1 - 1
+        end if
+
+    end subroutine clip_range
+
+    !
     !> Save final step wavefields for elastic media
     !
     subroutine output_final_step_wavefield
@@ -90,6 +108,18 @@ contains
 
         close (funit, status='delete')
 
+        ! The final step was saved after add_source changed the owned points, so its
+        ! halos are stale; make the restored state consistent across blocks
+        call commute_array_group(vx, fdhalf)
+        call commute_array_group(vy, fdhalf)
+        call commute_array_group(vz, fdhalf)
+        call commute_array_group(stressxx, fdhalf)
+        call commute_array_group(stressyy, fdhalf)
+        call commute_array_group(stresszz, fdhalf)
+        call commute_array_group(stressyz, fdhalf)
+        call commute_array_group(stressxz, fdhalf)
+        call commute_array_group(stressxy, fdhalf)
+
     end subroutine input_final_step_wavefield
 
     !
@@ -97,66 +127,51 @@ contains
     !
     subroutine prepare_boundary_saving
 
+        ! The layers to save along x are x = 2 - fdhalf to 1 and x = nx + 1 to nx + fdhalf,
+        ! over y and z padded by fdhalf; likewise along y and z. Each range is clipped
+        ! to this block, and an empty range has size zero (see clip_range).
         ! x
-        xbwbeg1 = max(nx1, 1 - fdhalf + 1)
-        xbwbeg2 = min(nx2, 1 - 1 + 1)
-        if (xbwbeg2 < xbwbeg1) then
-            xbwbeg1 = nx1 - 1
-            xbwbeg2 = nx1 - 2
-        end if
-
-        xbwend1 = max(nx1, nx + 1)
-        xbwend2 = min(nx2, nx + fdhalf)
-        if (xbwend2 < xbwend1) then
-            xbwend1 = nx2 - 1
-            xbwend2 = nx2 - 2
-        end if
-
-        xbwbegy = max(ny1, 1 - fdhalf)
-        xbwendy = min(ny2, ny + fdhalf)
-        xbwbegz = max(nz1, 1 - fdhalf)
-        xbwendz = min(nz2, nz + fdhalf)
+        xbwbeg1 = 2 - fdhalf
+        xbwbeg2 = 1
+        xbwend1 = nx + 1
+        xbwend2 = nx + fdhalf
+        xbwbegy = 1 - fdhalf
+        xbwendy = ny + fdhalf
+        xbwbegz = 1 - fdhalf
+        xbwendz = nz + fdhalf
 
         ! y
-        ybwbegx = max(nx1, 1 - fdhalf)
-        ybwendx = min(nx2, nx + fdhalf)
-
-        ybwbeg1 = max(ny1, 1 - fdhalf + 1)
-        ybwbeg2 = min(ny2, 1 - 1 + 1)
-        if (ybwbeg2 < ybwbeg1) then
-            ybwbeg1 = ny1 - 1
-            ybwbeg2 = ny1 - 2
-        end if
-
-        ybwend1 = max(ny1, ny + 1)
-        ybwend2 = min(ny2, ny + fdhalf)
-        if (ybwend2 < ybwend1) then
-            ybwend1 = ny2 - 1
-            ybwend2 = ny2 - 2
-        end if
-
-        ybwbegz = max(nz1, 1 - fdhalf)
-        ybwendz = min(nz2, nz + fdhalf)
+        ybwbegx = 1 - fdhalf
+        ybwendx = nx + fdhalf
+        ybwbeg1 = 2 - fdhalf
+        ybwbeg2 = 1
+        ybwend1 = ny + 1
+        ybwend2 = ny + fdhalf
+        ybwbegz = 1 - fdhalf
+        ybwendz = nz + fdhalf
 
         ! z
-        zbwbegx = max(nx1, 1 - fdhalf)
-        zbwendx = min(nx2, nx + fdhalf)
-        zbwbegy = max(ny1, 1 - fdhalf)
-        zbwendy = min(ny2, ny + fdhalf)
+        zbwbegx = 1 - fdhalf
+        zbwendx = nx + fdhalf
+        zbwbegy = 1 - fdhalf
+        zbwendy = ny + fdhalf
+        zbwbeg1 = 2 - fdhalf
+        zbwbeg2 = 1
+        zbwend1 = nz + 1
+        zbwend2 = nz + fdhalf
 
-        zbwbeg1 = max(nz1, 1 - fdhalf + 1)
-        zbwbeg2 = min(nz2, 1 - 1 + 1)
-        if (zbwbeg2 < zbwbeg1) then
-            zbwbeg1 = nz1 - 1
-            zbwbeg2 = nz1 - 2
-        end if
-
-        zbwend1 = max(nz1, nz + 1)
-        zbwend2 = min(nz2, nz + fdhalf)
-        if (zbwend2 < zbwend1) then
-            zbwend1 = nz2 - 1
-            zbwend2 = nz2 - 2
-        end if
+        call clip_range(xbwbeg1, xbwbeg2, nx1, nx2)
+        call clip_range(xbwend1, xbwend2, nx1, nx2)
+        call clip_range(xbwbegy, xbwendy, ny1, ny2)
+        call clip_range(xbwbegz, xbwendz, nz1, nz2)
+        call clip_range(ybwbegx, ybwendx, nx1, nx2)
+        call clip_range(ybwbeg1, ybwbeg2, ny1, ny2)
+        call clip_range(ybwend1, ybwend2, ny1, ny2)
+        call clip_range(ybwbegz, ybwendz, nz1, nz2)
+        call clip_range(zbwbegx, zbwendx, nx1, nx2)
+        call clip_range(zbwbegy, zbwendy, ny1, ny2)
+        call clip_range(zbwbeg1, zbwbeg2, nz1, nz2)
+        call clip_range(zbwend1, zbwend2, nz1, nz2)
 
         bwrecl = 0
         ! x

@@ -168,7 +168,7 @@ contains
                 end if
             end if
 
-            ! Read and add adjoint source
+            ! Read and add adjoint source; each block adds only to the stencil points it holds
             !$omp parallel private(ir, irx, iry, irz, rgx, rgy, rgz)
             do ir = 1, sgmtr%nr
                 if (sgmtr%recr(ir)%weight /= 0) then
@@ -177,12 +177,11 @@ contains
                     rgy = sgmtr%recr(ir)%gy
                     rgz = sgmtr%recr(ir)%gz
 
-                    if (is_in_block(rgx, rgy, rgz)) then
-
-                        !$omp do collapse(3)
-                        do irz = -nkw, nkw
-                            do iry = -nkw, nkw
-                                do irx = -nkw, nkw
+                    !$omp do collapse(3)
+                    do irz = -nkw, nkw
+                        do iry = -nkw, nkw
+                            do irx = -nkw, nkw
+                                if (is_in_block(rgx + irx, rgy + iry, rgz + irz)) then
                                     pr(rgx + irx, rgy + iry, rgz + irz) = &
                                         pr(rgx + irx, rgy + iry, rgz + irz) &
                                         + this%seis_pr%trace(ir)%data(t) &
@@ -190,12 +189,11 @@ contains
                                         *sgmtr%recr(ir)%interp_iy(iry) &
                                         *sgmtr%recr(ir)%interp_iz(irz) &
                                         *sgmtr%recr(ir)%weight
-                                end do
+                                end if
                             end do
                         end do
-                        !$omp end do
-
-                    end if
+                    end do
+                    !$omp end do
 
                 end if
             end do
@@ -203,6 +201,17 @@ contains
 
             ! Compute gradients
             if (mod(t, cc_step_interval) == 0) then
+                ! The velocities changed after their halo exchange; refresh the
+                ! halos that compute_gradient averages across block faces
+                call commute_array_group(prev_vx, fdhalf)
+                call commute_array_group(prev_vy, fdhalf)
+                call commute_array_group(prev_vz, fdhalf)
+                call commute_array_group(vx, fdhalf)
+                call commute_array_group(vy, fdhalf)
+                call commute_array_group(vz, fdhalf)
+                call commute_array_group(vxr, fdhalf)
+                call commute_array_group(vyr, fdhalf)
+                call commute_array_group(vzr, fdhalf)
                 call compute_gradient
             end if
 
@@ -233,11 +242,13 @@ contains
         ! Delete boundary saving files
         call close_boundary_saving(delete=.true.)
 
+        ! Sum the gradient blocks over the shot group
+        call allreduce_array_group(grad_vp)
+        call allreduce_array_group(grad_rho)
+
         ! Process and output gradients
         if (yn_energy_precond) then
 
-            call allreduce_array_group(grad_vp)
-            call allreduce_array_group(grad_rho)
             call allreduce_array_group(energy_src_v)
             call allreduce_array_group(energy_rec_v)
             call allreduce_array_group(energy_src_a)

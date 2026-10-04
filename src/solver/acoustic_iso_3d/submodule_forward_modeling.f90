@@ -64,22 +64,25 @@ contains
                 end if
             end if
 
-            ! Compute seismic data
+            ! Compute seismic data; each block sums only the stencil points it holds,
+            ! and collect_group sums the partial traces over the shot group
             !$omp parallel do private(ir, irx, iry, irz, rgx, rgy, rgz)
             do ir = 1, sgmtr%nr
                 rgx = sgmtr%recr(ir)%gx
                 rgy = sgmtr%recr(ir)%gy
                 rgz = sgmtr%recr(ir)%gz
-                if (sgmtr%recr(ir)%weight /= 0 .and. is_in_block(rgx, rgy, rgz)) then
+                if (sgmtr%recr(ir)%weight /= 0) then
                     do irz = -nkw, nkw
                         do iry = -nkw, nkw
                             do irx = -nkw, nkw
-                                this%seis_p%trace(ir)%data(t) = this%seis_p%trace(ir)%data(t) &
-                                    + p(rgx + irx, rgy + iry, rgz + irz) &
-                                    *sgmtr%recr(ir)%interp_ix(irx) &
-                                    *sgmtr%recr(ir)%interp_iy(iry) &
-                                    *sgmtr%recr(ir)%interp_iz(irz) &
-                                    *sgmtr%recr(ir)%weight
+                                if (is_in_block(rgx + irx, rgy + iry, rgz + irz)) then
+                                    this%seis_p%trace(ir)%data(t) = this%seis_p%trace(ir)%data(t) &
+                                        + p(rgx + irx, rgy + iry, rgz + irz) &
+                                        *sgmtr%recr(ir)%interp_ix(irx) &
+                                        *sgmtr%recr(ir)%interp_iy(iry) &
+                                        *sgmtr%recr(ir)%interp_iz(irz) &
+                                        *sgmtr%recr(ir)%weight
+                                end if
                             end do
                         end do
                     end do

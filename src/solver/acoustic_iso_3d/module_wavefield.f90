@@ -353,7 +353,7 @@ contains
                         if (is_in_block(sgx, sgy, sgz)) then
                             rho_s = rho(sgx, sgy, sgz)
                         end if
-                        call allreduce_array(rho_s)
+                        call allreduce_array_group(rho_s)
                         amp = amp/rho_s(1)
 
                         sgx = sgmtr%srcr(k)%hx

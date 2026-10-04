@@ -1043,8 +1043,8 @@ contains
             end do
             !$omp end parallel do
 
-            call allreduce_array(mstability)
-            call allreduce_array(mdispersion)
+            call allreduce_array_group(mstability)
+            call allreduce_array_group(mdispersion)
 
             mstability(:, :, -pml + 1:0) = float_huge
             mdispersion(:, :, -pml + 1:0) = float_huge

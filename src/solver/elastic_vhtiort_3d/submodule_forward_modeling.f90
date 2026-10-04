@@ -154,11 +154,13 @@ contains
                     call alloc_array(snapvy, [1, nx, 1, ny, 1, nz], pad=pml)
                     call alloc_array(snapvz, [1, nx, 1, ny, 1, nz], pad=pml)
 
-                    if (yn_free_surface) then
+                    ! The velocities changed after their halo exchange; refresh the
+                    ! halos that the averages below read across block faces
+                    call commute_array_group(vx, fdhalf)
+                    call commute_array_group(vy, fdhalf)
+                    call commute_array_group(vz, fdhalf)
 
-                        call commute_array_group(vx, 1)
-                        call commute_array_group(vy, 1)
-                        call commute_array_group(vz, 1)
+                    if (yn_free_surface) then
 
                         !$omp parallel do private(i, j, k) collapse(3)
                         do k = nz1, nz2

@@ -391,6 +391,9 @@ contains
         end do
 
         call mpibarrier_group
+        ! Each rank checked only its own traces; zero the other traces before the group sum
+        weight(:trace_in_group_rank(rankid_group, 1) - 1) = 0.0
+        weight(trace_in_group_rank(rankid_group, 2) + 1:) = 0.0
         call allreduce_array_group(weight)
         call allreduce_array_group(data_obs)
         call allreduce_array_group(data_syn)
@@ -667,8 +670,12 @@ contains
         ! Restore current iteration model
         call restore_current_model
 
-        ! Calculate optimal step size
+        ! Calculate optimal step size; every rank of a shot group holds the same sums
         call mpibarrier
+        if (rankid_group /= 0) then
+            sum1 = 0.0
+            sum2 = 0.0
+        end if
         call mpi_allreduce(mpi_in_place, sum1, 1, mpi_real, mpi_sum, mpi_comm_world, mpi_ierr)
         call mpi_allreduce(mpi_in_place, sum2, 1, mpi_real, mpi_sum, mpi_comm_world, mpi_ierr)
 

@@ -230,20 +230,22 @@ contains
             if (np /= 0 .and. l <= np) then
                 if (t - 1 == nint(snaps(l)/dt)) then
 
-                    if (yn_free_surface) then
+                    ! The velocities changed after their halo exchange; refresh the
+                    ! halos that the averages below read across block faces
+                    call commute_array_group(vx_hxiyiz, fdhalf)
+                    call commute_array_group(vy_hxiyiz, fdhalf)
+                    call commute_array_group(vz_hxiyiz, fdhalf)
+                    call commute_array_group(vx_ixhyiz, fdhalf)
+                    call commute_array_group(vy_ixhyiz, fdhalf)
+                    call commute_array_group(vz_ixhyiz, fdhalf)
+                    call commute_array_group(vx_ixiyhz, fdhalf)
+                    call commute_array_group(vy_ixiyhz, fdhalf)
+                    call commute_array_group(vz_ixiyhz, fdhalf)
+                    call commute_array_group(vx_hxhyhz, fdhalf)
+                    call commute_array_group(vy_hxhyhz, fdhalf)
+                    call commute_array_group(vz_hxhyhz, fdhalf)
 
-                        call commute_array_group(vx_hxiyiz, 1)
-                        call commute_array_group(vy_hxiyiz, 1)
-                        call commute_array_group(vz_hxiyiz, 1)
-                        call commute_array_group(vx_ixhyiz, 1)
-                        call commute_array_group(vy_ixhyiz, 1)
-                        call commute_array_group(vz_ixhyiz, 1)
-                        call commute_array_group(vx_ixiyhz, 1)
-                        call commute_array_group(vy_ixiyhz, 1)
-                        call commute_array_group(vz_ixiyhz, 1)
-                        call commute_array_group(vx_hxhyhz, 1)
-                        call commute_array_group(vy_hxhyhz, 1)
-                        call commute_array_group(vz_hxhyhz, 1)
+                    if (yn_free_surface) then
 
                         call alloc_array(snapvx, [1, nx, 1, ny, 1, nz], pad=pml)
                         call alloc_array(snapvy, [1, nx, 1, ny, 1, nz], pad=pml)

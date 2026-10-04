@@ -470,6 +470,12 @@ contains
 
         call mpibarrier
 
+        ! collect gradient; every rank of a shot group merged the same shot gradients
+        if (rankid_group /= 0) then
+            do i = 1, nmodel
+                model_grad(i)%array = 0
+            end do
+        end if
         do i = 1, nmodel
             call allreduce_array(model_grad(i)%array)
         end do

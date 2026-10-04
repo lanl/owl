@@ -379,9 +379,10 @@ contains
 
         ! 3D supports domain decomposition, to make modeling/FWI in large models faster
 #ifdef _dim3_
-        call readpar_int(file_parameter, 'rankx', rank3_group, 1)
+        ! The solvers decompose arrays ordered (x, y, z), so axis 1 is x and axis 3 is z
+        call readpar_int(file_parameter, 'rankx', rank1_group, 1)
         call readpar_int(file_parameter, 'ranky', rank2_group, 1)
-        call readpar_int(file_parameter, 'rankz', rank1_group, 1)
+        call readpar_int(file_parameter, 'rankz', rank3_group, 1)
         call readpar_int(file_parameter, 'ngroup', ngroup, max(floor(nrank*1.0/(rank1_group*rank2_group*rank3_group)), 1))
 #endif
 

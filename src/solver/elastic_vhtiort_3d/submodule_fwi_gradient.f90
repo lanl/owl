@@ -370,6 +370,17 @@ contains
             ! Compute gradients
             if (mod(t, cc_step_interval) == 0) then
                 if (yn_update_medium .and. t >= sgmtr%srcr(1)%hnt) then
+                    ! The velocities changed after their halo exchange; refresh the
+                    ! halos that compute_gradient averages across block faces
+                    call commute_array_group(prev_vx, fdhalf)
+                    call commute_array_group(prev_vy, fdhalf)
+                    call commute_array_group(prev_vz, fdhalf)
+                    call commute_array_group(vx, fdhalf)
+                    call commute_array_group(vy, fdhalf)
+                    call commute_array_group(vz, fdhalf)
+                    call commute_array_group(vxr, fdhalf)
+                    call commute_array_group(vyr, fdhalf)
+                    call commute_array_group(vzr, fdhalf)
                     call compute_gradient
                 end if
                 if (yn_update_source) then
@@ -426,19 +437,20 @@ contains
             return
         end if
 
+        ! Sum the gradient blocks over the shot group
+        call allreduce_array_group(grad_c11)
+        call allreduce_array_group(grad_c12)
+        call allreduce_array_group(grad_c13)
+        call allreduce_array_group(grad_c22)
+        call allreduce_array_group(grad_c23)
+        call allreduce_array_group(grad_c33)
+        call allreduce_array_group(grad_c44)
+        call allreduce_array_group(grad_c55)
+        call allreduce_array_group(grad_c66)
+        call allreduce_array_group(grad_rho)
+
         ! Output medium parameter gradient
         if (yn_energy_precond) then
-
-            call allreduce_array_group(grad_c11)
-            call allreduce_array_group(grad_c12)
-            call allreduce_array_group(grad_c13)
-            call allreduce_array_group(grad_c22)
-            call allreduce_array_group(grad_c23)
-            call allreduce_array_group(grad_c33)
-            call allreduce_array_group(grad_c44)
-            call allreduce_array_group(grad_c55)
-            call allreduce_array_group(grad_c66)
-            call allreduce_array_group(grad_rho)
 
             call allreduce_array_group(energy_src_v)
             call allreduce_array_group(energy_rec_v)
