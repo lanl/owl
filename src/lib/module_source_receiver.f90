@@ -1079,8 +1079,11 @@ contains
                     if (this%srcr(i)%stf_t(2) - this%srcr(i)%stf_t(1) /= this%dt) then
                         nw = nint((this%srcr(i)%stf_t(nw) - this%srcr(i)%stf_t(1))/this%dt) + 1
                         this%srcr(i)%stf = ginterp(this%srcr(i)%stf_t, this%srcr(i)%stf_amp, regspace(0.0, this%dt, (nw - 1)*this%dt), method='sinc')
-                        this%srcr(i)%nt = nw
+                    else
+                        ! Already sampled at dt
+                        this%srcr(i)%stf = this%srcr(i)%stf_amp
                     end if
+                    this%srcr(i)%nt = nw
 
                 end if
 

@@ -1,7 +1,7 @@
 
 
 # Elevation
-system "x_showgraph -in=ftopo.txt -ftype=ascii -ptype=2 -size1=6 -size2=2 -label1='Horizontal Distance (m)' -label2='Elevation (m)' -x1beg=0 -x1end=3000 -x2beg=-10 -x2end=310 -tick2beg=0 -linewidth=2 -tick1d=500 -mtick1=4 -tick2d=50 -mtick2=4 -out=plot/elevation.pdf -grid2=y  &"
+system "x_showgraph -in=./model/ftopo.txt -ftype=ascii -ptype=2 -size1=6 -size2=2 -label1='Horizontal Distance (m)' -label2='Elevation (m)' -x1beg=0 -x1end=3000 -x2beg=-10 -x2end=310 -tick2beg=0 -linewidth=2 -tick1d=500 -mtick1=4 -tick2d=50 -mtick2=4 -out=plot/elevation.pdf -grid2=y  &"
 
 
 # Inversion results

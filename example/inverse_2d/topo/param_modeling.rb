@@ -25,6 +25,6 @@ yn_free_surface = y
 measure_source_depth_from_surface = y
 measure_receiver_depth_from_surface = y
 free_surface_dz_refine = 2
-file_topo = ftopo.txt
+file_topo = ./model/ftopo.txt
 
 verbose = y
