@@ -379,6 +379,24 @@ contains
     end subroutine divide_shots
 
     !
+    ! Largest dt <= 0.95*dtstable whose mantissa is a multiple of 0.25. Rounding the mantissa
+    ! to the nearest multiple instead, as nice does, can give a dt up to 5.6% above dtstable.
+    !
+    function nice_stable_dt(dtstable) result(dt)
+
+        real, intent(in) :: dtstable
+        real :: dt
+
+        double precision :: x
+        integer :: nm
+
+        x = 0.95d0*dtstable
+        nm = order_of_magnitude(x)
+        dt = floor(x/10.0d0**nm/0.25d0)*0.25d0*10.0d0**nm
+
+    end function nice_stable_dt
+
+    !
     ! Check stability and dispersion
     !
     subroutine check_dt_f0(dt, dtstable, f0, f0clean)
@@ -399,7 +417,7 @@ contains
                     //' Warning: dt = '//num2str(dt, '(es)') &
                     //' > stable dt = '//num2str(dtstable, '(es)')//' s')
             end if
-            dt = nice(0.95*dtstable, 0.25)
+            dt = nice_stable_dt(dtstable)
             if (rankid_group == 0) then
                 call warn(date_time_compact() &
                     //' Warning: Set dt = '//num2str(dt, '(es)')//' s')
@@ -407,7 +425,7 @@ contains
         end if
 
         if (dt == 0) then
-            dt = nice(0.95*dtstable, 0.25)
+            dt = nice_stable_dt(dtstable)
             if (rankid_group == 0) then
                 call warn(date_time_compact() &
                     //' Warning: dt = 0, set dt = '//num2str(dt, '(es)')//' s')
