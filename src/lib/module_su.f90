@@ -1261,8 +1261,13 @@ contains
         if (allocated(this%mask)) then
             deallocate (this%mask)
         end if
+        ! A gather already in the object (from an earlier load or init) holds its own nt, dt, and nr.
+        ! These are not presets for this file, so clear them and take the values from this file.
         if (allocated(this%trace)) then
             deallocate (this%trace)
+            this%nt = 0
+            this%dt = 0
+            this%nr = 0
         end if
         if (present(stdin)) then
             from_stdin = stdin
