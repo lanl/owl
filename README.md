@@ -1,8 +1,6 @@
 # Description
 **OWL: Open Wave Library for seismic wave modeling and full-waveform inversion**
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23307328.svg)](https://doi.org/10.5281/zenodo.23307328)
-
 `OWL` is an open-source package for seismic wave simulation and full-waveform inversion (FWI) in the following types of media:
 
 - 2D/3D isotropic acoustic media, with or without a flat acoustic free surface at the top.
@@ -15,15 +13,16 @@ Algorithm features:
 - For seismic wave modeling and FWI in 2D/3D isotropic elastic media, or in simple anisotropic elastic media where $C_{ij} = 0$ ($ij=14,15,16,24,25,26,34,35,36,45,46,56$), the solvers are based on a high-order standard staggered-grid finite-difference scheme (SSG-FD).
     - In the isotropic case, the elastic medium is parameterized with $(V_p, V_s, \rho)$.
     - In the anisotropic case, the elastic medium can be parameterized with one of three methods:
-        - Thomsen parameters: $(V_p, V_s, \rho, \varepsilon, \delta, \theta, \phi)$, where $\theta$ and $\phi$ can only be $N\pi/2$ (where $N=0, 1, 2$); this can describe anisotropy up to VTI (transverse isotropy with a vertical symmetry axis) or HTI (TI with a horizontal axis).
-        - Alkhalifah-Tsvankin parameters: $(V_p, V_s, \rho, \varepsilon, \eta, \theta, \phi)$, where $\theta$ and $\phi$ can only be $N\pi/2$ (where $N=0, 1, 2$); this can describe anisotropy up to VTI or HTI.
+        - Thomsen parameters: $(V_p, V_s, \rho, \varepsilon, \delta, \gamma, \theta, \phi)$, where $\theta$ and $\phi$ can only be $N\pi/2$ (where $N=0, 1, 2$); this can describe anisotropy up to VTI (transverse isotropy with a vertical symmetry axis) or HTI (TI with a horizontal axis).
+        - Alkhalifah-Tsvankin parameters: $(V_p, V_s, \rho, \varepsilon, \eta, \gamma, \theta, \phi)$, where $\theta$ and $\phi$ can only be $N\pi/2$ (where $N=0, 1, 2$); this can describe anisotropy up to VTI or HTI.
         - Elasticity constants: $(C_{11}, C_{12}, C_{13}, C_{22}, C_{23}, C_{33}, C_{44}, C_{55}, C_{66})$; this can describe anisotropy up to VTI, HTI, or orthorhombic (ORT) anisotropy.
     - All of the above parameters can be spatially heterogeneous.
+    - The model can have a flat elastic free surface. In this case, the mesh will be refined in the near-surface region to properly simulate surface waves.
 - For seismic wave modeling and FWI in 2D/3D isotropic or general anisotropic elastic media, the solvers are based on a high-order fully staggered-grid finite-difference scheme (FSG-FD, a.k.a. the Lebedev scheme).
     - In the isotropic case, the elastic medium is parameterized with $(V_p, V_s, \rho)$.
     - In the anisotropic case, the elastic medium can be parameterized with one of three methods:
-        - Thomsen parameters: $(V_p, V_s, \rho, \varepsilon, \delta, \theta, \phi)$, where $\theta$ and $\phi$ can be arbitrary; this can describe anisotropy up to TI with a tilted axis (TTI).
-        - Alkhalifah-Tsvankin parameters: $(V_p, V_s, \rho, \varepsilon, \eta, \theta, \phi)$, where $\theta$ and $\phi$ can be arbitrary; this can describe anisotropy up to TTI.
+        - Thomsen parameters: $(V_p, V_s, \rho, \varepsilon, \delta, \gamma, \theta, \phi)$, where $\theta$ and $\phi$ can be arbitrary; this can describe anisotropy up to TI with a tilted axis (TTI).
+        - Alkhalifah-Tsvankin parameters: $(V_p, V_s, \rho, \varepsilon, \eta, \gamma, \theta, \phi)$, where $\theta$ and $\phi$ can be arbitrary; this can describe anisotropy up to TTI.
         - Elasticity constants: $C_{ij}$ with $i,j=1,2,\cdots, 6$ and $j \geq i$; this can describe anisotropy up to general anisotropy, including TTI, rotated ORT, monoclinic, and triclinic anisotropies.
     - All of the above parameters can be spatially heterogeneous.
     - The model can have a flat or topographic elastic free surface.
@@ -36,12 +35,11 @@ Algorithm features:
     - Zero-lag cross-correlation misfit
     - Weighted normalized deconvolution (a.k.a. AWI -- adaptive waveform inversion)
     - Local AWI
-    - Phase/amplitude misfits based on generalized dynamic time warping (developed in this work).
+    - Phase/amplitude misfits based on generalized dynamic time warping (developed in this work)
 - Various inversion schemes for FWI, including:
     - SD: steepest descent
     - NCG: nonlinear conjugate gradient
     - _l_-BFGS: limited-memory Broyden-Fletcher-Goldfarb-Shanno algorithm
-    - Adam: adaptive moment estimation algorithm
 - Various gradient preconditioning and regularization schemes for FWI.
 - Built-in data processing and interpolation functions for automated modeling/FWI.
 - User-friendly parameter input.
@@ -55,7 +53,7 @@ Currently, `OWL` does not support wave modeling or FWI in:
 
 These features may be included in future releases.
 
-This work was supported by Los Alamos National Laboratory (LANL) Laboratory Directed Research and Development (LDRD) program. LANL is operated by Triad National Security, LLC, for the National Nuclear Security Administration (NNSA) of the U.S. Department of Energy (DOE) under Contract No. 89233218CNA000001. The research used high-performance computing resources provided by LANL's Institutional Computing program.
+This work was supported by the Los Alamos National Laboratory (LANL) Laboratory Directed Research and Development (LDRD) program. LANL is operated by Triad National Security, LLC, for the National Nuclear Security Administration (NNSA) of the U.S. Department of Energy (DOE) under Contract No. 89233218CNA000001. The research used high-performance computing resources provided by LANL's Institutional Computing program.
 
 The code is released under LANL open source approval reference O4921.
 
@@ -74,7 +72,7 @@ cd src
 ruby install.rb
 ```
 
-The compiled `OWL` executables will be placed in `bin`.
+The compiled `OWL` executables will be placed in `~/bin`.
 
 To rebuild:
 
@@ -83,9 +81,9 @@ cd src
 ruby install.rb clean
 ```
 
-Several examples are included in the `example` directory.
+Several examples are included in the `example` directory. The `test` directory contains unit tests for `OWL`. See [test/README.md](test/README.md) for how to run them.
 
-> **Caution on parameter names.** `OWL`'s parameter names are not interchangeable with those of [`LATTE`](https://github.com/lanl/latte_traveltime) or other packages from the same authors, even where the parameters play the same role. In particular, `OWL` spells directional smoothing, balancing, taper and filter parameters with an underscore before the axis, e.g. `grad_smooth_x`, `grad_smooth_y`, `grad_smooth_z`, `reg_smooth_x`, `vpvsratio_smooth_x`, whereas `LATTE` uses `grad_smoothx`, `grad_smoothz`, etc. A parameter name that `OWL` does not recognize is silently replaced by its default value rather than reported as an error, so a `LATTE`-style name in an `OWL` parameter file has no effect. Please refer to [doc/README.md](doc/README.md) for the complete list of `OWL` parameter names and use caution when adapting parameter files from other packages.
+> **Caution on parameter names.** `OWL`'s parameter names are not interchangeable with those of [`LATTE`](https://github.com/lanl/latte_traveltime) or other packages from the same authors, even where the parameters play the same role. In particular, `OWL` spells directional smoothing, balancing, taper, and filter parameters with an underscore before the axis, e.g., `grad_smooth_x`, `grad_smooth_y`, `grad_smooth_z`, `reg_smooth_x`, `vpvsratio_smooth_x`, whereas `LATTE` uses `grad_smoothx`, `grad_smoothz`, etc. A parameter name that `OWL` does not recognize is silently ignored rather than reported as an error, so a `LATTE`-style name in an `OWL` parameter file has no effect. Please refer to [doc/README.md](doc/README.md) for the complete list of `OWL` parameter names and use caution when adapting parameter files from other packages.
 
 # License
 &copy; 2025-2026. Triad National Security, LLC. All rights reserved.
@@ -109,11 +107,11 @@ We welcome feedback, bug reports, and ideas for improving `OWL`.
 
 If you use this package in your research and find it useful, please cite it as:
 
-* Kai Gao, 2025, OWL: Open Wave Library for seismic wave modeling and full-waveform inversion in acoustic and elastic media, _GitHub Repository_, URL: [github.com/lanl/owl](https://github.com/lanl/owl).
-* Kai Gao, Jackson W. Saftner, Ting Chen, Ryan T. Modrak, 2026, OWL: Open Wave Library for seismic wave modeling and full-waveform inversion in acoustic and elastic media, _Geophysical Journal International_.
+* Kai Gao, 2025, OWL: Open Wave Library for seismic wave modeling and full-waveform inversion in acoustic and elastic media, _GitHub Repository_, URL: [github.com/lanl/owl](https://github.com/lanl/owl), DOI: [10.5281/zenodo.23307328](https://doi.org/10.5281/zenodo.23307328).
+* Kai Gao, Jackson W. Saftner, Ting Chen, Ryan T. Modrak, 2026, OWL: Open Wave Library for seismic wave modeling and full-waveform inversion in acoustic and elastic media, _Geophysical Journal International_, DOI: [10.1093/gji/ggag450](https://doi.org/10.1093/gji/ggag450).
 
 # Examples
-Below are some of the examples included in the paper under review (LA-UR-26-20025).
+Below are some of the examples included in the [paper](https://doi.org/10.1093/gji/ggag450) published in _Geophysical Journal International_.
 
 <p align="center">
   <img src="doc/Figures/valles_caldera/wave.jpg" alt="Description" width="400">
@@ -131,4 +129,4 @@ Below are some of the examples included in the paper under review (LA-UR-26-2002
   <img src="doc/Figures/topo/vp_dtw.jpg" alt="Description" width="200">
   <img src="doc/Figures/topo/vs_dtw.jpg" alt="Description" width="200">
 </p>
-<p align="center"><strong>FWI in an elastic medium with a topographic free surface. From top to bottom: ground-truth Vp and Vs models, simulated data (vz component), models inverted by L2-norm FWI, and models inverted by GWI.</strong></p>
+<p align="center"><strong>FWI in an elastic medium with a topographic free surface. From top to bottom: ground-truth Vp and Vs models, simulated data (vz component), initial models, models inverted by L2-norm FWI, and models inverted by GWI (FWI based on generalized dynamic time warping).</strong></p>

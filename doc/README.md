@@ -24,7 +24,7 @@ Installation of `OWL` is straightforward:
 
 ```bash
 git clone https://github.com/lanl/owl
-cd owl
+cd owl/src
 ruby install.rb clean
 ```
 
