@@ -180,7 +180,7 @@ contains
         logical, intent(in), optional :: smooth_inverse
 
         integer :: i, n1, n2, n3
-        real, allocatable, dimension(:, :, :) :: mt, maux, mcoh
+        real, allocatable, dimension(:, :, :) :: mt, maux, mcoh, sn, wn
 
         n1 = size(m, 1)
         n2 = size(m, 2)
@@ -216,8 +216,24 @@ contains
                     if (reg_smoothz < 0) then
                         call readpar_xfloat(file_parameter, 'reg_smooth_z_'//tidy(name), reg_smoothz, 1.0*dz, iter*1.0)
                     end if
-                    if (present(smooth_inverse) .and. smooth_inverse) then
+                    if (present(smooth_inverse) .and. smooth_inverse .and. all(mt /= 0)) then
                         mt = 1.0/gauss_filt(1.0/mt, [reg_smoothz/dz, reg_smoothy/dy, reg_smoothx/dx])
+                    else if (present(smooth_inverse) .and. smooth_inverse) then
+                        ! Points with zero velocity, e.g., Vs in a fluid, would have an
+                        ! infinite slowness. Smooth the slowness of the nonzero points
+                        ! alone, i.e., with zero slowness and zero weight elsewhere, and
+                        ! divide by the smoothed weight; the zero points stay zero
+                        sn = zeros_like(mt)
+                        wn = zeros_like(mt)
+                        where (mt /= 0)
+                            sn = 1.0/mt
+                            wn = 1.0
+                        end where
+                        sn = gauss_filt(sn, [reg_smoothz/dz, reg_smoothy/dy, reg_smoothx/dx])
+                        wn = gauss_filt(wn, [reg_smoothz/dz, reg_smoothy/dy, reg_smoothx/dx])
+                        where (mt /= 0)
+                            mt = wn/sn
+                        end where
                     else
                         mt = gauss_filt(mt, [reg_smoothz/dz, reg_smoothy/dy, reg_smoothx/dx])
                     end if
