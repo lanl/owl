@@ -445,7 +445,7 @@ contains
                     do j = 1, seis%nr
                         if (maxval(abs(seis%trace(j)%data)) /= 0) then
                             seis%trace(j)%data = balance_filt(seis%trace(j)%data, &
-                                nint(movingbalwin/seis%trace(j)%header%d1), 0.001)
+                                nint(movingbalwin/seis%dt), 0.001)
                         end if
                     end do
                     !$omp end parallel do

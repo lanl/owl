@@ -73,6 +73,7 @@ module mod_su
         ! byte 115
         ! ns is a 4-byte integer in memory; see encode_su_ns for its encoding in the file
         integer(4) :: ns
+        ! dt is an unsigned 16-bit integer in microseconds; see encode_su_dt and decode_su_dt
         integer(2) :: dt
         integer(2) :: GainType
         integer(2) :: InstrumentGainConstant
@@ -107,7 +108,7 @@ module mod_su
         integer(2) :: OverTravel
 
         ! begin SU/SEGY differences
-        ! byte 181
+        ! byte 181; OWL stores the exact sample interval in d1, see decode_su_dt
         real(4) :: d1
         real(4) :: f1
         real(4) :: d2
@@ -460,7 +461,7 @@ contains
             end if
 
             this%trace(i)%header%ns = nnt
-            this%trace(i)%header%dt = int(ddt*1.0e6)
+            this%trace(i)%header%dt = encode_su_dt(ddt)
             this%trace(i)%header%d1 = ddt
 
         end do
@@ -1173,7 +1174,7 @@ contains
         do i = 1, this%nr
             this%trace(i)%header%ns = this%nt
             !            this%trace(i)%header%nsample = this%nt
-            this%trace(i)%header%dt = int(this%dt*1.0e6)
+            this%trace(i)%header%dt = encode_su_dt(this%dt)
             this%trace(i)%header%d1 = this%dt
             allocate (this%trace(i)%data(1:this%nt))
             this%trace(i)%data = 0.0
@@ -1242,6 +1243,63 @@ contains
 
     end function decode_su_ns
 
+    !
+    !> Encode the sample interval dt (s) into the SU trace header. SU defines dt at bytes 117-118
+    !> as an unsigned 16-bit integer in microseconds, so this field cannot hold a dt such as 62.5 us.
+    !> This field holds dt rounded to whole microseconds, or 0 when the rounded value is outside
+    !> 1-65535. d1 (bytes 181-184) holds the exact dt; see decode_su_dt.
+    !
+    pure function encode_su_dt(dt) result(dt16)
+
+        real, intent(in) :: dt
+        integer(2) :: dt16
+
+        integer :: us
+        double precision :: x
+
+        x = dt*1.0d6
+        if (x >= 0.5d0 .and. x < 65535.5d0) then
+            us = nint(x)
+        else
+            us = 0
+        end if
+
+        ! Bit pattern of an unsigned 16-bit integer
+        if (us > 32767) then
+            us = us - 65536
+        end if
+        dt16 = int(us, kind=2)
+
+    end function encode_su_dt
+
+    !
+    !> Decode the sample interval (s) from bytes 117-118 (dt16) and bytes 181-184 (d1) of the SU
+    !> trace header; inverse of encode_su_dt. d1 counts when it lies between 1 ns and 1000 s and
+    !> either dt16 is zero or the two agree to within one microsecond, modulo 2**16. The tolerance
+    !> also covers files from earlier OWL versions, which truncated dt16 and wrapped it above
+    !> 65535 us. Otherwise dt16 counts, because SU files from other programs may hold unrelated
+    !> values in d1, such as a frequency interval or a SEG-Y coordinate.
+    !
+    pure function decode_su_dt(dt16, d1) result(dt)
+
+        integer(2), intent(in) :: dt16
+        real, intent(in) :: d1
+        real :: dt
+
+        integer :: us, k
+
+        us = iand(int(dt16), 65535)
+        dt = us/1.0e6
+
+        if (d1 >= 1.0e-9 .and. d1 <= 1.0e3) then
+            k = modulo(nint(d1*1.0d6) - us, 65536)
+            if (us == 0 .or. k <= 1 .or. k == 65535) then
+                dt = d1
+            end if
+        end if
+
+    end function decode_su_dt
+
     subroutine load_su(this, infile, nt, dt, nr, header_only, stdin)
 
         class(su), intent(inout) :: this
@@ -1255,6 +1313,8 @@ contains
         integer(kind=4) :: ns32
         integer :: ns, funit, i
         integer(kind=8) :: trcbegpos
+        real(kind=4) :: d1
+        real :: header_dt
         logical :: read_header_only
         logical :: from_stdin
 
@@ -1333,15 +1393,17 @@ contains
             this%dt = dt
         else
             read (funit, pos=117) ds
+            read (funit, pos=181) d1
+            header_dt = decode_su_dt(ds, d1)
             if (this%dt == 0) then
-                this%dt = ds/1.0e6
+                this%dt = header_dt
             else
-                if (nint(this%dt*1e6) /= ds) then
-                    call warn(' <load_su> Warning: Inconsistent sample interval, trace header dt = '//num2str(ds/1.0e6)//', preset dt = '//num2str(this%dt))
+                if (abs(this%dt - header_dt) > 1.0e-6*this%dt) then
+                    call warn(' <load_su> Warning: Inconsistent sample interval, trace header dt = '//num2str(header_dt)//', preset dt = '//num2str(this%dt))
                 end if
             end if
         end if
-        call assert(this%dt > 0, ' <load_su> Error: dt must >= 0.')
+        call assert(this%dt > 0, ' <load_su> Error: dt must > 0.')
 
         ! Number of traces
         if (present(nr)) then
